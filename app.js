@@ -137,8 +137,6 @@ renderer.setSize(window.innerWidth,window.innerHeight);
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
-renderer.toneMapping=THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure=1.1;
 
 var scene=new THREE.Scene();
 scene.background=new THREE.Color(0x1a4fd6);
@@ -188,46 +186,26 @@ for(var vj=0;vj<pos.count;vj++){
   var slope=1-ny;
   tmpC.copy(cSnow);
   if(slope>.22)tmpC.lerp(cRock,smooth(.22,.5,slope));
-  if(y>700)tmpC.lerp(cRock,smooth(700,900,y)*.7);
+  if(y>760)tmpC.lerp(cRock,smooth(760,950,y)*.5);
   if(slope>.1&&slope<.38&&y>500&&y<800)tmpC.lerp(cIce,.45);       /* blue ice face */
   tmpC.lerp(cSnowB,smooth(300,700,y)*.25);                          /* biru muda */
   tmpC.lerp(cMid,smooth(100,400,y)*.15);
   if(y>860)tmpC.lerp(cSun,smooth(860,936,y)*.55);                   /* sunrise tint summit */
   /* AO palsu lembah: rongga + kemiringan + sastrugi mikro */
   var cav=fbm(pos.getX(vj)*.006,pos.getZ(vj)*.006,4)*.5+.5; /* 0..1 */
-  var ao=.62+.38*cav;
+  var ao=.70+.30*cav;
   ao*=1-slope*.28;
   ao*=1-smooth(500,150,y)*.18; /* dasar lembah lebih gelap */
   tmpC.multiplyScalar(ao);
   /* strata batuan: garis sedimen halus di tebing */
   if(slope>.22)tmpC.multiplyScalar(1+.05*Math.sin(y*.09+fbm(pos.getX(vj)*.01,pos.getZ(vj)*.01,2)*4));
+  tmpC.multiplyScalar(.90+.20*(fbm(pos.getX(vj)*.09,pos.getZ(vj)*.09,2)*.5+.5));
   tmpC.offsetHSL(0,0,fbm(pos.getX(vj)*.05,pos.getZ(vj)*.05,2)*.02);
   colors[vj*3]=tmpC.r;colors[vj*3+1]=tmpC.g;colors[vj*3+2]=tmpC.b;
 }
 tg.setAttribute('color',new THREE.BufferAttribute(colors,3));
-/* PBR: salju agak mengkilap + tekstur detail butiran */
-var detailTex=(function(){
-  var c=document.createElement('canvas');c.width=c.height=256;
-  var g=c.getContext('2d');
-  g.fillStyle='#ffffff';g.fillRect(0,0,256,256);
-  for(var i=0;i<9000;i++){
-    var v=200+((Math.random()*55)|0);
-    g.fillStyle='rgb('+v+','+v+','+v+')';
-    var s=Math.random()<.85?1:2;
-    g.fillRect((Math.random()*256)|0,(Math.random()*256)|0,s,s);
-  }
-  g.strokeStyle='rgba(210,220,235,.5)';
-  for(var k=0;k<60;k++){
-    g.lineWidth=1;g.beginPath();
-    var yy=(Math.random()*256)|0;
-    g.moveTo(0,yy);g.bezierCurveTo(80,yy+6,170,yy-6,256,yy);
-    g.stroke();
-  }
-  var t=new THREE.CanvasTexture(c);
-  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(90,90);
-  return t;
-})();
-var terrain=new THREE.Mesh(tg,new THREE.MeshStandardMaterial({vertexColors:true,map:detailTex,flatShading:false,roughness:.58,metalness:.12}));
+/* PBR: salju agak mengkilap, batu kasar — smooth shading */
+var terrain=new THREE.Mesh(tg,new THREE.MeshStandardMaterial({vertexColors:true,flatShading:false,roughness:.58,metalness:.12}));
 terrain.receiveShadow=true;terrain.castShadow=true;
 scene.add(terrain);
 
@@ -242,7 +220,7 @@ function dotTexture(){
   var g=c.getContext('2d');var gr=g.createRadialGradient(32,32,2,32,32,30);
   gr.addColorStop(0,'rgba(255,255,255,1)');gr.addColorStop(1,'rgba(255,255,255,0)');
   g.fillStyle=gr;g.fillRect(0,0,64,64);
-  var t=new THREE.CanvasTexture(c);return t;
+  var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
 }
 var softTex=dotTexture();
 var SNOW_N=2600, snowPos=new Float32Array(SNOW_N*3), snowVel=new Float32Array(SNOW_N);
@@ -339,6 +317,7 @@ function moonTexture(){
   return new THREE.CanvasTexture(c);
 }
 var sunTexC=sunTexture(),moonTexC=moonTexture();
+sunTexC.encoding=moonTexC.encoding=THREE.sRGBEncoding;
 var sunMesh=new THREE.Mesh(new THREE.CircleGeometry(95,48),new THREE.MeshBasicMaterial({map:sunTexC,transparent:true,opacity:0,fog:false,depthWrite:false}));
 sunMesh.position.set(300,1050,600);sunMesh.lookAt(0,900,0);scene.add(sunMesh);
 var sunHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:sunTexC,color:0xfff2c0,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
@@ -582,12 +561,13 @@ function flagTexture(){
   sh.addColorStop(.8,'rgba(0,0,0,0)');sh.addColorStop(1,'rgba(0,0,0,.22)');
   g.fillStyle=sh;g.fillRect(0,0,128,84);
   g.fillStyle='rgba(255,255,255,.3)';g.fillRect(0,0,128,6);
-  return new THREE.CanvasTexture(c);
+  var ft=new THREE.CanvasTexture(c);ft.encoding=THREE.sRGBEncoding;return ft;
 }
 var sflagGeo=new THREE.PlaneGeometry(11,6.5,14,7);
 sflagGeo.translate(5.5,0,0); /* jepit di tiang x=0 */
 var sflagBase=sflagGeo.attributes.position.array.slice();
-var sflag=new THREE.Mesh(sflagGeo,new THREE.MeshStandardMaterial({map:flagTexture(),side:THREE.DoubleSide,roughness:.85,metalness:0}));
+var flagTexC=flagTexture();
+var sflag=new THREE.Mesh(sflagGeo,new THREE.MeshStandardMaterial({map:flagTexC,emissive:0xffffff,emissiveMap:flagTexC,emissiveIntensity:.28,side:THREE.DoubleSide,roughness:.85,metalness:0}));
 sflag.position.set(.4,poleY+13.5,0);scene.add(sflag);
 /* gundukan + jejak kaki di summit */
 var sumMound=new THREE.Mesh(new THREE.SphereGeometry(7,12,8),new THREE.MeshStandardMaterial({color:0xe8eef8,roughness:1,flatShading:false}));
@@ -602,7 +582,7 @@ var beamTex=(function(){
   gr.addColorStop(.4,'rgba(255,240,200,.38)');
   gr.addColorStop(1,'rgba(255,240,200,0)');
   g.fillStyle=gr;g.fillRect(0,0,16,128);
-  return new THREE.CanvasTexture(c);
+  var bt=new THREE.CanvasTexture(c);bt.encoding=THREE.sRGBEncoding;return bt;
 })();
 function makeClimber(jacket, pants){
   var g=new THREE.Group();
@@ -1040,7 +1020,6 @@ function applyEnv(p,time){
   skyUni.topColor.value.copy(cA);
   skyUni.botColor.value.copy(fogC).lerp(new THREE.Color(0xF2F7A0),smooth(.7,1,p)*.45);
   sun.intensity=sunI;
-  renderer.toneMappingExposure=lerp(1.02,1.22,smooth(.7,1,p))*(dayNight==='night'?.85:1);
   snowMat.opacity=clamp(snowOp+stormF*.25,0,1);
   stormMat.opacity=clamp(stormF*.75,0,.85);
   fogMat.opacity=clamp(.12+whiteout*.55+stormF*.15,0,.75);
