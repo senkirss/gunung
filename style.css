@@ -84,6 +84,12 @@ button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
 #descend:hover{color:var(--c4)}
 #descend .arr{display:block;width:2px;height:18px;background:currentColor}
 
+/* AUTO-WARN — peringatan gerak otomatis saat idle */
+#autoWarn{position:absolute;top:var(--edge);left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:var(--t-meta);letter-spacing:.2em;text-transform:uppercase;color:#0a1a3a;background:var(--c4);border-radius:99px;padding:.65em 1.3em;opacity:0;transition:opacity .4s;white-space:nowrap;box-shadow:0 4px 24px rgb(4 10 28/.45)}
+#autoWarn.show{opacity:.96}
+#autoWarn.on{background:rgb(10 26 58/.6);color:var(--c4);border:1px solid var(--c4);backdrop-filter:blur(8px);animation:apulse 1.6s ease-in-out infinite}
+@keyframes apulse{50%{opacity:.55}}
+
 /* TOOLBAR — suara angin, siang/malam, bahasa */
 #toolbar{position:fixed;z-index:6;left:var(--edge);bottom:var(--edge);display:flex;gap:.6em}
 #toolbar button{font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;color:rgb(255 255 255/.75);border:1px solid rgb(255 255 255/.28);border-radius:99px;padding:.65em 1.1em;background:rgb(10 26 58/.55);backdrop-filter:blur(8px);transition:all .3s var(--e-out);pointer-events:auto;cursor:pointer}

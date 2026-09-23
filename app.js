@@ -17,7 +17,9 @@ var I18N={
    'Es biru 50 derajat. Satu fixed-line dari anchor ke anchor, cuaca badai jauh di bawah sepatumu.',
    'Batu gelap, salju keras, bintang. Tak ada yang hidup di sini. Kamu hanya meminjam waktu.',
    'Matahari terbit di lautan awan. Semua gunung lain di bumi ada di bawahmu. Tak ada lagi ke atas.'],
-  w:['Salju ringan — Basecamp','Serac aktif — Icefall','Silau putih — Cwm','Badai di bawah — Face','Death zone — di atas 8.000 m','Sunrise — Summit 8.849 m']
+  w:['Salju ringan — Basecamp','Serac aktif — Icefall','Silau putih — Cwm','Badai di bawah — Face','Death zone — di atas 8.000 m','Sunrise — Summit 8.849 m'],
+  autoWarn:'⚠ Otomatis jalan dalam {s} dtk — sentuh untuk batal',
+  autoOn:'⏵ Auto-gerak aktif — sentuh untuk ambil alih'
  },
  en:{
   unit:'Metres',hint:'Scroll to climb',descend:'Descend',soundOn:'Wind On',soundOff:'Wind Off',
@@ -29,7 +31,9 @@ var I18N={
    'Blue ice at fifty degrees. A single fixed line, anchor to anchor, weather far below your boots.',
    'Dark rock, hard snow, stars. Nothing lives here. You are only borrowing time.',
    '8,849 metres. Sunrise on a sea of cloud, every other mountain beneath you. Nothing above.'],
-  w:['Light snow — Base Camp','Active seracs — Icefall','White glare — Cwm','Storm below — Face','Death zone — above 8,000 m','Sunrise — Summit 8,849 m']
+  w:['Light snow — Base Camp','Active seracs — Icefall','White glare — Cwm','Storm below — Face','Death zone — above 8,000 m','Sunrise — Summit 8,849 m'],
+  autoWarn:'⚠ Auto-walk in {s}s — touch to cancel',
+  autoOn:'⏵ Auto-move active — touch to take over'
  }
 };
 var CHAPTERS=[
@@ -1074,6 +1078,26 @@ function tick(){
   requestAnimationFrame(tick);
   var dt=Math.min(clock.getDelta(),.05),time=clock.elapsedTime;
   var raw=progress();
+  /* auto-gerak: mulai setelah 8 dtk tak disentuh, ping-pong naik-turun */
+  var nowMs=Date.now(),idleSec=(nowMs-lastInteract)/1000;
+  if(autoActive&&idleSec<=AUTO_DELAY){autoActive=false;scrollEl.style.scrollBehavior='';}
+  if(!autoActive&&idleSec>AUTO_DELAY&&!document.hidden){
+    autoActive=true;autoDir=raw>=0.999?-1:(raw<=0.001?1:autoDir);
+    scrollEl.style.scrollBehavior='auto';
+  }
+  if(autoActive){
+    var maxS=scrollEl.scrollHeight-scrollEl.clientHeight,range=maxS>0?maxS:1;
+    var spd=(range/55)*Math.min(1,(idleSec-AUTO_DELAY)/2+.2); /* ease-in, full trip ~55 dtk */
+    var nt=scrollEl.scrollTop+autoDir*spd*dt;
+    if(nt>=range-2){nt=range;autoDir=-1;}
+    if(nt<=2){nt=0;autoDir=1;}
+    lastAutoDrive=Date.now();scrollEl.scrollTop=nt;
+    raw=range>0?clamp(nt/range,0,1):0;
+  }
+  /* peringatan */
+  if(autoActive){autoWarnEl.classList.add('show');autoWarnEl.classList.add('on');autoWarnT.textContent=I18N[LANG].autoOn;}
+  else if(idleSec>AUTO_DELAY-3){autoWarnEl.classList.add('show');autoWarnEl.classList.remove('on');autoWarnT.textContent=I18N[LANG].autoWarn.replace('{s}',Math.ceil(AUTO_DELAY-idleSec));}
+  else{autoWarnEl.classList.remove('show');autoWarnEl.classList.remove('on');}
   var prevCur=cur;
   var p=cur+(raw-cur)*.08;cur=p;
   /* kecepatan scroll mentah -> efek realistis (arah + laju) */
@@ -1170,14 +1194,23 @@ function tick(){
   updateUI(p);
   renderer.render(scene,camera);
 }
-scrollEl.addEventListener('scroll',function(){}, {passive:true});
+/* ---------- AUTO-GERAK saat idle: jalan sendiri jika tak disentuh ---------- */
+var AUTO_DELAY=8,lastInteract=Date.now(),lastAutoDrive=0,autoActive=false,autoDir=1;
+var autoWarnEl=document.getElementById('autoWarn'),autoWarnT=document.getElementById('autoWarnT');
+scrollEl.addEventListener('scroll',function(){
+  if(autoActive&&(Date.now()-lastAutoDrive)<150)return; /* scroll dari mesin, abaikan */
+  lastInteract=Date.now();
+},{passive:true});
+['pointerdown','wheel','touchstart','keydown'].forEach(function(ev){
+  window.addEventListener(ev,function(){lastInteract=Date.now();},{passive:true});
+});
 descend.addEventListener('click',function(){scrollEl.scrollTo({top:0,behavior:'smooth'});});
 window.addEventListener('resize',function(){camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
 
 /* ---------- BOOT ---------- */
 var boot=document.getElementById('boot'),bar=boot.querySelector('#bootBar i'),bs=document.getElementById('bootS');
 var msgs=['Membaca rute…','Membangun gunung…','Menabur salju…','Mengatur cuaca…','Siap mendaki'];
-var bi=0;var bint=setInterval(function(){bi++;bar.style.width=(bi/msgs.length*100)+'%';bs.textContent=msgs[Math.min(bi,msgs.length-1)];if(bi>=msgs.length){clearInterval(bint);boot.setAttribute('data-done','1');hint.style.opacity=1;}},350);
+var bi=0;var bint=setInterval(function(){bi++;bar.style.width=(bi/msgs.length*100)+'%';bs.textContent=msgs[Math.min(bi,msgs.length-1)];if(bi>=msgs.length){clearInterval(bint);boot.setAttribute('data-done','1');hint.style.opacity=1;lastInteract=Date.now();}},350);
 updateUI(0);
 tick();
 })();
