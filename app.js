@@ -223,6 +223,25 @@ function dotTexture(){
   var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
 }
 var softTex=dotTexture();
+/* tekstur awan: gumpalan multi-blob seperti kembang kol */
+function cloudTexture(){
+  var c=document.createElement('canvas');c.width=c.height=128;
+  var g=c.getContext('2d');
+  for(var i=0;i<26;i++){
+    var x=24+Math.random()*80,y=44+Math.random()*44,r=12+Math.random()*22;
+    var gr=g.createRadialGradient(x,y,1,x,y,r);
+    gr.addColorStop(0,'rgba(255,255,255,.55)');
+    gr.addColorStop(.7,'rgba(255,255,255,.22)');
+    gr.addColorStop(1,'rgba(255,255,255,0)');
+    g.fillStyle=gr;g.beginPath();g.arc(x,y,r,0,7);g.fill();
+  }
+  var sh=g.createLinearGradient(0,60,0,128);
+  sh.addColorStop(0,'rgba(180,190,210,0)');
+  sh.addColorStop(1,'rgba(170,185,205,.25)');
+  g.fillStyle=sh;g.fillRect(0,0,128,128);
+  var t=new THREE.CanvasTexture(c);t.encoding=THREE.sRGBEncoding;return t;
+}
+var cloudTex=cloudTexture();
 var SNOW_N=2600, snowPos=new Float32Array(SNOW_N*3), snowVel=new Float32Array(SNOW_N);
 for(var si=0;si<SNOW_N;si++){snowPos[si*3]=(Math.random()-.5)*900;snowPos[si*3+1]=Math.random()*700;snowPos[si*3+2]=(Math.random()-.5)*900;snowVel[si]=8+Math.random()*22;}
 var snowGeo=new THREE.BufferGeometry();snowGeo.setAttribute('position',new THREE.BufferAttribute(snowPos,3));
@@ -333,6 +352,19 @@ var moonMesh=new THREE.Mesh(new THREE.CircleGeometry(70,48),new THREE.MeshBasicM
 moonMesh.position.set(-500,1350,900);moonMesh.lookAt(0,900,0);scene.add(moonMesh);
 var moonHalo=new THREE.Sprite(new THREE.SpriteMaterial({map:softTex,color:0xbcd4ff,transparent:true,opacity:0,blending:THREE.AdditiveBlending,depthWrite:false}));
 moonHalo.scale.set(600,600,1);moonHalo.position.copy(moonMesh.position);scene.add(moonHalo);
+/* awan summit: gumpalan realistis melayang di sekitar puncak */
+var sumClouds=[];
+for(var sci=0;sci<42;sci++){
+  var sm=new THREE.SpriteMaterial({map:cloudTex,color:0xfff6e8,transparent:true,opacity:0,depthWrite:false});
+  var sp=new THREE.Sprite(sm);
+  var ca=Math.random()*PI*2,cr=120+Math.random()*300;
+  sp.position.set(Math.cos(ca)*cr,880+Math.random()*170,Math.sin(ca)*cr);
+  var sc=130+Math.random()*190;
+  sp.scale.set(sc,sc*.62,1);
+  scene.add(sp);
+  sumClouds.push(sp);
+  sp.userData={vx:3+Math.random()*7,vz:(Math.random()-.5)*6,o:.28+Math.random()*.24,ph:Math.random()*7};
+}
 
 /* ---------- PROPS REALISTIS : BASECAMP ---------- */
 function seeded(s){s=s>>>0||1;return function(){s^=s<<13;s>>>=0;s^=s>>17;s^=s<<5;s>>>=0;return s/4294967296;};}
@@ -1218,6 +1250,20 @@ function tick(){
     if(fa[fi2*3]>-280)fa[fi2*3]-=780;
   }
   fogGeo.attributes.position.needsUpdate=true;
+  /* awan summit: hanyut + memudar masuk */
+  var sumOp=smooth(.68,.9,p);
+  for(var sci2=0;sci2<sumClouds.length;sci2++){
+    var scc=sumClouds[sci2],ud=scc.userData;
+    scc.position.x+=(ud.vx+wind*.4)*dt;
+    scc.position.z+=ud.vz*dt;
+    scc.position.y+=Math.sin(time*.3+ud.ph)*2.5*dt;
+    var ddx=scc.position.x,ddz=scc.position.z;
+    if(ddx*ddx+ddz*ddz>260000){
+      var aa=Math.random()*PI*2;
+      scc.position.set(Math.cos(aa)*400,880+Math.random()*170,Math.sin(aa)*400);
+    }
+    scc.material.opacity=ud.o*sumOp;
+  }
   /* bendera kain berkibar realistis: kibas + puntir per-bendera */
   for(var k=0;k<flagMeshes.length;k++){
     var fmk=flagMeshes[k],ph=flagPhase[k]||0;
