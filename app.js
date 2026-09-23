@@ -637,16 +637,39 @@ function makeClimber(jacket, pants){
     var m=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),mat);m.position.y=-h/2;pivot.add(m);
     g.add(pivot);return pivot;
   }
-  var armL=limb(.5,2.1,mJ,-1.15,4.6),armR=limb(.5,2.1,mJ,1.15,4.6);
-  var stick=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,3.4,5),mD);
-  stick.position.set(0,-2.2,.3);stick.rotation.x=.25;armR.add(stick);
-  var legL=limb(.62,2.4,mP,-.45,2.45),legR=limb(.62,2.4,mP,.45,2.45);
-  [legL,legR].forEach(function(leg){
-    var boot=new THREE.Mesh(new THREE.BoxGeometry(.7,.5,1.1),mD);
-    boot.position.set(0,-2.6,.2);leg.add(boot);
+  /* kaki & lengan dua segmen: paha+betis (lutut), atas+bawah (siku) */
+  function seg(r1,r2,h,mat){
+    var m=new THREE.Mesh(new THREE.CylinderGeometry(r1,r2,h,7),mat);
+    m.position.y=-h/2;return m;
+  }
+  function joint(px,py){
+    var pivot=new THREE.Group();pivot.position.set(px,py,0);g.add(pivot);return pivot;
+  }
+  var armL=joint(-1.12,4.55),armR=joint(1.12,4.55);
+  armL.add(seg(.30,.26,1.05,mJ));armR.add(seg(.30,.26,1.05,mJ));
+  var elbL=new THREE.Group();elbL.position.y=-1.05;armL.add(elbL);
+  var elbR=new THREE.Group();elbR.position.y=-1.05;armR.add(elbR);
+  elbL.add(seg(.24,.20,1.0,mJ));elbR.add(seg(.24,.20,1.0,mJ));
+  var gloveM=new THREE.MeshStandardMaterial({color:0x18202e,roughness:.9});
+  [elbL,elbR].forEach(function(e){
+    var hnd=new THREE.Mesh(new THREE.SphereGeometry(.30,8,7),gloveM);
+    hnd.position.y=-1.15;e.add(hnd);
   });
+  var stick=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,3.4,5),mD);
+  stick.position.set(0,-1.1,.35);stick.rotation.x=.3;elbR.add(stick);
+  var legL=joint(-.45,2.75),legR=joint(.45,2.75);
+  legL.add(seg(.38,.32,1.3,mP));legR.add(seg(.38,.32,1.3,mP));
+  var kneeL=new THREE.Group();kneeL.position.y=-1.3;legL.add(kneeL);
+  var kneeR=new THREE.Group();kneeR.position.y=-1.3;legR.add(kneeR);
+  kneeL.add(seg(.30,.24,1.15,mP));kneeR.add(seg(.30,.24,1.15,mP));
+  [kneeL,kneeR].forEach(function(kn){
+    var boot=new THREE.Mesh(new THREE.BoxGeometry(.72,.5,1.15),mD);
+    boot.position.set(0,-1.3,.22);kn.add(boot);
+  });
+  var collar=new THREE.Mesh(new THREE.CylinderGeometry(.55,.72,.6,8),mJ);
+  collar.position.y=4.85;g.add(collar);
   g.traverse(function(o){if(o.isMesh){o.castShadow=true;}});
-  return {g:g,torso:torso,head:head,armL:armL,armR:armR,legL:legL,legR:legR,lampGlow:lampGlow,beam:beam,spot:spot,phase:Math.random()*6,lastStep:0,stepSide:1,heading:1};
+  return {g:g,torso:torso,head:head,armL:armL,armR:armR,elbL:elbL,elbR:elbR,legL:legL,legR:legR,kneeL:kneeL,kneeR:kneeR,lampGlow:lampGlow,beam:beam,spot:spot,phase:Math.random()*6,lastStep:0,stepSide:1,heading:1,prev:null,strideSm:0};
 }
 var climbers=[
   Object.assign(makeClimber(0xe8822e,0x2a3350),{off:0.004,side:3.5}),
@@ -704,41 +727,61 @@ function updateClimbers(p,time,wind,speed){
     if(holdW>.5)look=flagTop;
     else look=c.g.position.clone().addScaledVector(dirN,c.heading);
     c.g.lookAt(look.x,c.g.position.y,look.z);
-    c.phase+=Math.abs(dp)*900*(1+idx*.12)+Math.abs(scrollVel)*2.2+speed*.12;
+    /* langkah dikunci ke jarak tempuh — kaki tidak selip */
+    if(!c.prev)c.prev=c.g.position.clone();
+    var moved=c.g.position.distanceTo(c.prev);
+    c.prev.copy(c.g.position);
+    c.phase+=moved*1.4;
+    var strideT=clamp(Math.abs(dp)*500+speed*1.1+wind*.01,0,1)*(1-holdW*.8);
+    c.strideSm+=(strideT-c.strideSm)*.15;
+    var stride=c.strideSm;
     var sw=Math.sin(c.phase),sw2=Math.sin(c.phase+PI);
-    var stride=clamp(.25+Math.abs(dp)*400+speed*.9+wind*.008,.25,1)*(1-holdW*.75);
-    c.legL.rotation.x=sw*.75*stride;
-    c.legR.rotation.x=sw2*.75*stride;
-    c.armL.rotation.x=sw2*.55*stride;
-    var walkArmR=sw*.55*stride-.25;
+    /* paha + lutut menekuk */
+    c.legL.rotation.x=sw*.5*stride;
+    c.legR.rotation.x=sw2*.5*stride;
+    c.kneeL.rotation.x=(.1+.95*Math.pow(Math.max(0,Math.sin(c.phase-.9)),1.2))*stride;
+    c.kneeR.rotation.x=(.1+.95*Math.pow(Math.max(0,Math.sin(c.phase+PI-.9)),1.2))*stride;
+    /* bahu berlawanan arah + siku menekuk */
+    c.armL.rotation.x=sw2*.45*stride;
+    c.armR.rotation.x=sw*.45*stride-.15;
+    c.elbL.rotation.x=-(.3+.4*Math.max(0,Math.sin(c.phase+PI+.9)))*Math.max(stride,.15)-.1;
+    c.elbR.rotation.x=-(.3+.4*Math.max(0,Math.sin(c.phase+.9)))*Math.max(stride,.15)-.1;
+    var walkArmR=c.armR.rotation.x;
     /* tangan kanan terangkat memegang tiang saat summit */
     c.armR.rotation.x=lerp(walkArmR,-2.55,holdW);
     c.armR.rotation.z=lerp(-.12,0,holdW);
     c.armL.rotation.z=.12;
     /* tangan kiri melambai saat summit */
     if(holdW>.5){c.armL.rotation.z=.9+Math.sin(time*6)*.5;c.armL.rotation.x=lerp(c.armL.rotation.x,-.4,holdW);}
-    c.g.position.y+=Math.abs(Math.cos(c.phase))*.28*stride;
+    c.g.position.y+=Math.abs(Math.cos(c.phase))*.22*stride;
     /* selebrasi summit: loncat-loncat gembira */
     var celeb=smooth(.955,.995,p)*(isLeader?1:.7);
     if(celeb>0.01){
       var jj=time*5.2+idx*1.4;
       var air=Math.abs(Math.sin(jj));
       c.g.position.y+=air*2.6*celeb;
-      var tuck=Math.sin(jj)>0?.65:.15;
-      c.legL.rotation.x=lerp(c.legL.rotation.x,tuck,celeb);
-      c.legR.rotation.x=lerp(c.legR.rotation.x,tuck*.7,celeb);
+      c.legL.rotation.x=lerp(c.legL.rotation.x,.55,celeb);
+      c.legR.rotation.x=lerp(c.legR.rotation.x,.4,celeb);
+      c.kneeL.rotation.x=lerp(c.kneeL.rotation.x,1.1,celeb);
+      c.kneeR.rotation.x=lerp(c.kneeR.rotation.x,1.1,celeb);
       c.legL.rotation.z=lerp(c.legL.rotation.z||0,.3,celeb);
       c.legR.rotation.z=lerp(c.legR.rotation.z||0,-.3,celeb);
       if(!isLeader){
         c.armL.rotation.x=lerp(c.armL.rotation.x,-2.9,celeb);
         c.armR.rotation.x=lerp(c.armR.rotation.x,-2.9,celeb);
+        c.elbL.rotation.x=lerp(c.elbL.rotation.x,-.1,celeb);
+        c.elbR.rotation.x=lerp(c.elbR.rotation.x,-.1,celeb);
         c.armL.rotation.z=lerp(c.armL.rotation.z,.4,celeb);
         c.armR.rotation.z=lerp(c.armR.rotation.z,-.4,celeb);
       }
     }
-    /* badan condong ke arah gerak: naik = bongkok, turun = senderan */
-    c.torso.rotation.x=lerp(c.heading>0?.14+stride*.1:-.12,0,holdW);
-    c.head.rotation.x=holdW>.5?-.5:-.1;
+    /* badan: condong arah gerak + putar pinggul + napas saat diam */
+    var breath=Math.sin(time*1.6+idx*2)*.03*(1-stride);
+    c.torso.rotation.x=lerp(c.heading>0?.14+stride*.08:-.12,0,holdW);
+    c.torso.rotation.y=sw*.07*stride;
+    c.torso.rotation.z=sw*.05*stride;
+    c.torso.position.y=3.6+breath;
+    c.head.rotation.x=(holdW>.5?-.5:-.1)-c.torso.rotation.x*.5+Math.sin(c.phase*2)*.02*stride;
     var night=(dayNight==='night')?1:smooth(.55,.75,p);
     c.lampGlow.material.opacity=Math.min(1,night*1.2);
     c.beam.material.opacity=night*(.45+Math.sin(time*13+idx*2)*.05);
