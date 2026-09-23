@@ -137,6 +137,8 @@ renderer.setSize(window.innerWidth,window.innerHeight);
 renderer.shadowMap.enabled=true;
 renderer.shadowMap.type=THREE.PCFSoftShadowMap;
 renderer.outputEncoding=THREE.sRGBEncoding;
+renderer.toneMapping=THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure=1.1;
 
 var scene=new THREE.Scene();
 scene.background=new THREE.Color(0x1a4fd6);
@@ -197,12 +199,35 @@ for(var vj=0;vj<pos.count;vj++){
   ao*=1-slope*.28;
   ao*=1-smooth(500,150,y)*.18; /* dasar lembah lebih gelap */
   tmpC.multiplyScalar(ao);
+  /* strata batuan: garis sedimen halus di tebing */
+  if(slope>.22)tmpC.multiplyScalar(1+.05*Math.sin(y*.09+fbm(pos.getX(vj)*.01,pos.getZ(vj)*.01,2)*4));
   tmpC.offsetHSL(0,0,fbm(pos.getX(vj)*.05,pos.getZ(vj)*.05,2)*.02);
   colors[vj*3]=tmpC.r;colors[vj*3+1]=tmpC.g;colors[vj*3+2]=tmpC.b;
 }
 tg.setAttribute('color',new THREE.BufferAttribute(colors,3));
-/* PBR: salju agak mengkilap, batu kasar — smooth shading */
-var terrain=new THREE.Mesh(tg,new THREE.MeshStandardMaterial({vertexColors:true,flatShading:false,roughness:.58,metalness:.12}));
+/* PBR: salju agak mengkilap + tekstur detail butiran */
+var detailTex=(function(){
+  var c=document.createElement('canvas');c.width=c.height=256;
+  var g=c.getContext('2d');
+  g.fillStyle='#ffffff';g.fillRect(0,0,256,256);
+  for(var i=0;i<9000;i++){
+    var v=200+((Math.random()*55)|0);
+    g.fillStyle='rgb('+v+','+v+','+v+')';
+    var s=Math.random()<.85?1:2;
+    g.fillRect((Math.random()*256)|0,(Math.random()*256)|0,s,s);
+  }
+  g.strokeStyle='rgba(210,220,235,.5)';
+  for(var k=0;k<60;k++){
+    g.lineWidth=1;g.beginPath();
+    var yy=(Math.random()*256)|0;
+    g.moveTo(0,yy);g.bezierCurveTo(80,yy+6,170,yy-6,256,yy);
+    g.stroke();
+  }
+  var t=new THREE.CanvasTexture(c);
+  t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(90,90);
+  return t;
+})();
+var terrain=new THREE.Mesh(tg,new THREE.MeshStandardMaterial({vertexColors:true,map:detailTex,flatShading:false,roughness:.58,metalness:.12}));
 terrain.receiveShadow=true;terrain.castShadow=true;
 scene.add(terrain);
 
@@ -257,6 +282,18 @@ for(var ti=0;ti<ST_N;ti++){var th=Math.random()*PI*2,ph=Math.random()*PI*.45;var
 var stGeo=new THREE.BufferGeometry();stGeo.setAttribute('position',new THREE.BufferAttribute(stPos,3));
 var stMat=new THREE.PointsMaterial({size:7,map:softTex,transparent:true,opacity:0,depthWrite:false,color:0xffffff,sizeAttenuation:false});
 var stars=new THREE.Points(stGeo,stMat);stars.frustumCulled=false;scene.add(stars);
+
+/* kilau salju: glint yang berkelip di koridor rute */
+var SPK_N=420,spkPos=new Float32Array(SPK_N*3);
+for(var spi=0;spi<SPK_N;spi++){
+  var spu=.02+Math.random()*.96;
+  var scp=curve.getPointAt(spu);
+  var ssx=scp.x+(Math.random()-.5)*90,ssz=scp.z+(Math.random()-.5)*90;
+  spkPos[spi*3]=ssx;spkPos[spi*3+1]=heightAt(ssx,ssz)+.4;spkPos[spi*3+2]=ssz;
+}
+var spkGeo=new THREE.BufferGeometry();spkGeo.setAttribute('position',new THREE.BufferAttribute(spkPos,3));
+var spkMat=new THREE.PointsMaterial({size:1.8,map:softTex,transparent:true,opacity:.4,depthWrite:false,color:0xffffff,blending:THREE.AdditiveBlending});
+var sparkles=new THREE.Points(spkGeo,spkMat);sparkles.frustumCulled=false;scene.add(sparkles);
 
 /* matahari REALISTIS: inti + korona + flare, bulan kawah */
 function sunTexture(){
@@ -960,6 +997,7 @@ function applyEnv(p,time){
   skyUni.topColor.value.copy(cA);
   skyUni.botColor.value.copy(fogC).lerp(new THREE.Color(0xF2F7A0),smooth(.7,1,p)*.45);
   sun.intensity=sunI;
+  renderer.toneMappingExposure=lerp(1.02,1.22,smooth(.7,1,p))*(dayNight==='night'?.85:1);
   snowMat.opacity=clamp(snowOp+stormF*.25,0,1);
   stormMat.opacity=clamp(stormF*.75,0,.85);
   fogMat.opacity=clamp(.12+whiteout*.55+stormF*.15,0,.75);
@@ -1140,6 +1178,7 @@ function tick(){
   var ca=clGeo.attributes.position.array;
   for(var j=0;j<CL_N;j++){ca[j*3]+=dt*(6+wind*.5);if(ca[j*3]>1300)ca[j*3]-=2600;}
   clGeo.attributes.position.needsUpdate=true;
+  spkMat.opacity=.3+.2*Math.sin(time*2.3)+speed*.08;
   /* badai streak: melesat horizontal, recycle di sekitar kamera */
   var stormF2=applyEnv._storm||0;
   var sa=stormGeo.attributes.position.array;
