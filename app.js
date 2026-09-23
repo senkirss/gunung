@@ -8,7 +8,7 @@ var sat=function(v){return v<0?0:v>1?1:v}, smooth=function(a,b,x){var t=sat((x-a
 var LANG='id';
 var I18N={
  id:{
-  unit:'Meter',hint:'Scroll untuk mendaki',descend:'Turun',soundOn:'Angin On',soundOff:'Angin Off',
+  unit:'Meter',hint:'Scroll untuk mendaki',descend:'⛷ Seluncur',soundOn:'Angin On',soundOff:'Angin Off',
   subs:['Sebelum Gunung','Labirin Bergerak','Lembah Sunyi','Di Atas Awan','Di Atas 8.000 M','Puncak Dunia'],
   paras:[
    'Ketinggian terakhir di mana tubuh masih setuju. Tenda, tali, oksigen, dan dinding es raksasa di atas moraine.',
@@ -22,7 +22,7 @@ var I18N={
   autoOn:'⏵ Auto-gerak aktif — sentuh untuk ambil alih'
  },
  en:{
-  unit:'Metres',hint:'Scroll to climb',descend:'Descend',soundOn:'Wind On',soundOff:'Wind Off',
+  unit:'Metres',hint:'Scroll to climb',descend:'⛷ Slide',soundOn:'Wind On',soundOff:'Wind Off',
   subs:['Before the Mountain','The Moving Labyrinth','Valley of Silence','Above the Clouds','Above 8,000 M','Top of the World'],
   paras:[
    '5,364 metres. The last altitude where the body still agrees. Tents, rope, oxygen, and a wall of ice above the moraine.',
@@ -715,7 +715,7 @@ function summitGround(x,z){
 }
 function updateClimbers(p,time,wind,speed){
   var dp=p-lastP_climb;lastP_climb=p;
-  var hold=smooth(.93,.985,p); /* efek pegang bendera di summit */
+  var hold=smooth(.93,.985,p)*(1-slideW); /* efek pegang bendera di summit */
   var standPos=new THREE.Vector3(4.2,summitGround(4.2,2.0)+.1,2.0);
   var flagTop=new THREE.Vector3(0,poleY+13.5,0);
   climbers.forEach(function(c,idx){
@@ -767,7 +767,7 @@ function updateClimbers(p,time,wind,speed){
     if(holdW>.5){c.armL.rotation.z=.9+Math.sin(time*6)*.5;c.armL.rotation.x=lerp(c.armL.rotation.x,-.4,holdW);}
     c.g.position.y+=Math.abs(Math.cos(c.phase))*.22*stride;
     /* selebrasi summit: loncat-loncat gembira */
-    var celeb=smooth(.955,.995,p)*(isLeader?1:.7);
+    var celeb=smooth(.955,.995,p)*(isLeader?1:.7)*(1-slideW);
     if(celeb>0.01){
       var jj=time*5.2+idx*1.4;
       var air=Math.abs(Math.sin(jj));
@@ -787,8 +787,23 @@ function updateClimbers(p,time,wind,speed){
         c.armR.rotation.z=lerp(c.armR.rotation.z,-.4,celeb);
       }
     }
+    /* pose berseluncur: condong belakang, kaki lurus depan, tangan melebar */
+    if(slideW>.01){
+      c.torso.rotation.x+=( -0.55 - c.torso.rotation.x)*slideW;
+      c.legL.rotation.x+=( -1.1 - c.legL.rotation.x)*slideW;
+      c.legR.rotation.x+=( -1.0 - c.legR.rotation.x)*slideW;
+      c.kneeL.rotation.x+=( .35 - c.kneeL.rotation.x)*slideW;
+      c.kneeR.rotation.x+=( .5 - c.kneeR.rotation.x)*slideW;
+      c.armL.rotation.x+=( -.35 - c.armL.rotation.x)*slideW;
+      c.armR.rotation.x+=( -.35 - c.armR.rotation.x)*slideW;
+      c.armL.rotation.z+=( 1.25 - c.armL.rotation.z)*slideW;
+      c.armR.rotation.z+=( -1.25 - c.armR.rotation.z)*slideW;
+      c.head.rotation.x+=( .32 - c.head.rotation.x)*slideW;
+      c.g.position.y+=Math.sin(time*9+idx)*.14*slideW;
+      c.g.position.y+=slideW*.3;
+    }
     /* badan: condong arah gerak + putar pinggul + napas saat diam */
-    var breath=Math.sin(time*1.6+idx*2)*.03*(1-stride);
+    var breath=Math.sin(time*1.6+idx*2)*.03*(1-stride)*(1-slideW*.8);
     c.torso.rotation.x=lerp(c.heading>0?.14+stride*.08:-.12,0,holdW);
     c.torso.rotation.y=sw*.07*stride;
     c.torso.rotation.z=sw*.05*stride;
@@ -799,7 +814,7 @@ function updateClimbers(p,time,wind,speed){
     c.beam.material.opacity=night*(.45+Math.sin(time*13+idx*2)*.05);
     c.spot.intensity=night*2.4;
     /* jejak kaki: tiap setengah langkah, kiri/kanan bergantian */
-    if(c.phase-c.lastStep>PI){
+    if(slideW<.3&&c.phase-c.lastStep>PI){
       c.lastStep=c.phase;
       c.stepSide=-(c.stepSide||1);
       var lat=side.clone().multiplyScalar(c.stepSide*.5);
@@ -876,6 +891,31 @@ function puff(x,y,z,big,col){
   pf.s.position.set(x+(RND()-.5)*4,y+(RND()-.5)*3,z+(RND()-.5)*4);
   pf.s.material.color.setHex(col||0xcfd8ea);
   pf.life=0;pf.max=1.2+RND()*.9;pf.big=big||1;
+}
+/* ski spray: kabut salju terpental saat seluncur */
+var SPRAY_N=120,sprays=[],sprayIdx=0;
+for(var spi=0;spi<SPRAY_N;spi++){
+  var spMa=new THREE.SpriteMaterial({map:cloudTex,color:0xffffff,transparent:true,opacity:0,depthWrite:false});
+  var spr2=new THREE.Sprite(spMa);
+  spr2.scale.set(9,9,1);scene.add(spr2);
+  sprays.push({s:spr2,vx:0,vy:0,vz:0,life:9,max:1.2,gy:0});
+}
+function sprayBurst(x,y,z,dx,dz,pow){
+  var nn=pow>.6?3:pow>.35?2:1;
+  for(var si=0;si<nn;si++){
+    var sp=sprays[sprayIdx++%SPRAY_N];
+    var ang=Math.atan2(dz,dx)+PI+(RND()-.5)*1.4;
+    var spd=(8+RND()*18)*pow;
+    sp.vx=Math.cos(ang)*spd+(RND()-.5)*6;
+    sp.vz=Math.sin(ang)*spd+(RND()-.5)*6;
+    sp.vy=7+RND()*14*pow;
+    sp.s.position.set(x+(RND()-.5)*2,y+.3+RND()*.6,z+(RND()-.5)*2);
+    sp.gy=y;sp.life=0;sp.max=.7+RND()*.85;
+    sp.s.material.color.setHex(RND()<.35?0xdbe8ff:RND()<.6?0xffffff:0xf0f8ff);
+    sp.s.material.opacity=.55;
+    var sc=7+RND()*9*pow;
+    sp.s.scale.set(sc,sc,1);
+  }
 }
 function spawnFall(f){
   var ch=chutes[(RND()*chutes.length)|0];
@@ -1101,7 +1141,7 @@ function applyEnv(p,time){
   return wind+stormF*22;
 }
 function updateCamera(p,time,wind,speed){
-  speed=speed||0;
+  speed=Math.max(speed||0, slideW*0.9);
   var u=clamp(p,0,1)*.985+.005;
   var pos=curve.getPointAt(u),ahead=curve.getPointAt(clamp(u+.022,0,1));
   var dir=new THREE.Vector3().subVectors(ahead,pos);dir.y=0;dir.normalize();
@@ -1109,6 +1149,7 @@ function updateCamera(p,time,wind,speed){
   var wide=1-smooth(.55,.9,p);           /* lebar di bawah, rapat di atas */
   var off=side.multiplyScalar(lerp(26,60,wide));
   off.y=lerp(14,44,wide);
+  if(slideW>0.01){ off.y*= (1-slideW*0.45); off.addScaledVector(side, -slideW*8); }
   var shake=wind*.06+speed*3+rockRumble*5;
   var tp=pos.clone().add(off);
   tp.x+=Math.sin(time*1.3)*shake;tp.y+=Math.sin(time*1.7)*shake*.6;
@@ -1170,6 +1211,20 @@ function tick(){
   requestAnimationFrame(tick);
   var dt=Math.min(clock.getDelta(),.05),time=clock.elapsedTime;
   var raw=progress();
+  /* seluncur: animasi Summit->Basecamp dengan easing */
+  if(slideOn){
+    var sdt=(time-slideT0)/slideDur;
+    if(sdt>=1){ sdt=1; slideOn=false; slideW=0; scrollEl.style.scrollBehavior=""; }
+    else {
+      var e=sdt<0.5?2*sdt*sdt:1-Math.pow(-2*sdt+2,2)/2;
+      var target=1-e;
+      var maxS=scrollEl.scrollHeight-scrollEl.clientHeight;
+      if(maxS>0){ var nt=target*maxS; scrollEl.scrollTop=nt; lastAutoDrive=Date.now(); raw=target; }
+      slideW=0.25+0.75*Math.sin(Math.min(1,e*1.2)*Math.PI*0.5);
+      if(e>.92) slideW*=(1-e)/0.08;
+    }
+    if(!slideOn) slideW=0;
+  }
   /* auto-gerak: mulai setelah 8 dtk tak disentuh, ping-pong naik-turun */
   var nowMs=Date.now(),idleSec=(nowMs-lastInteract)/1000;
   if(autoActive&&idleSec<=AUTO_DELAY){autoActive=false;scrollEl.style.scrollBehavior='';}
@@ -1207,6 +1262,7 @@ function tick(){
   var targetFov=58+speed*9;
   if(Math.abs(camera.fov-targetFov)>.05){camera.fov+=(targetFov-camera.fov)*.1;camera.updateProjectionMatrix();}
   camera.rotation.z+=clamp(-scrollVel*.35,-.06,.06)*.5;
+  if(slideW>0.01) camera.rotation.z+=Math.sin(time*2.2)*0.03*slideW;
   /* vignette berdenyut saat laju */
   var vg=document.getElementById('vignette');
   if(vg)vg.style.opacity=(.55+speed*.45).toFixed(2);
@@ -1298,20 +1354,58 @@ function tick(){
   tentLight2.intensity=.85+Math.sin(time*11+2)*.1;
   updateRockfall(p,dt,wind);
   updateClimbers(p,time,wind,speed);
+  /* spray spawn & physics */
+  var ld=climbers[0];
+  var sprayPow=slideW;
+  if(!slideOn) sprayPow=Math.max(sprayPow, clamp(-scrollVel*8,0,1)*(p>.08?1:0)*smooth(.1,.9,p));
+  if(sprayPow>0.08){
+    var ahead=curve.getPointAt(clamp(p*.985+.02,0,1));
+    var behind=curve.getPointAt(clamp(p*.985,0,1));
+    var sdx=ahead.x-behind.x, sdz=ahead.z-behind.z;
+    if(Math.abs(sdx)+Math.abs(sdz)<1e-4){ sdx=Math.sin(time*2)*0.5; sdz=Math.cos(time*2)*0.5; }
+    var gy=heightAt(ld.g.position.x,ld.g.position.z);
+    sprayBurst(ld.g.position.x, gy+.4, ld.g.position.z, sdx, sdz, clamp(sprayPow,0,1));
+    if(sprayPow>.45 && ((sprayIdx&1)==0)) sprayBurst(ld.g.position.x+(RND()-.5)*3, gy+.3, ld.g.position.z+(RND()-.5)*3, sdx,sdz, sprayPow*.7);
+    if(sprayPow>.7) sprayBurst(ld.g.position.x+(RND()-.5)*4, gy+.5, ld.g.position.z+(RND()-.5)*4, sdx,sdz, sprayPow*.5);
+  }
+  for(var ssi=0;ssi<SPRAY_N;ssi++){
+    var spr=sprays[ssi];
+    if(spr.life>spr.max){ spr.s.material.opacity=0; continue; }
+    spr.life+=dt;
+    var tt=clamp(spr.life/spr.max,0,1);
+    spr.vy-=42*dt;
+    spr.s.position.x+=spr.vx*dt + wind*.5*dt;
+    spr.s.position.y+=spr.vy*dt;
+    spr.s.position.z+=spr.vz*dt;
+    if(spr.s.position.y < spr.gy+.35 && spr.vy<0){
+      spr.s.position.y=spr.gy+.35;
+      spr.vy*=-0.28; spr.vx*=0.62; spr.vz*=0.62;
+      if(Math.abs(spr.vy)<1.2) spr.life=Math.max(spr.life, spr.max*0.55);
+    }
+    spr.s.position.y+=Math.sin(time*3+ssi)*0.4*dt;
+    var scc=(7+tt*22)*(0.9+sprayPow*0.5);
+    spr.s.scale.set(scc,scc,1);
+    spr.s.material.opacity=(1-tt)*(0.62+sprayPow*0.25);
+    spr.s.position.x+=wind*.4*dt;
+  }
   updateUI(p);
   renderer.render(scene,camera);
 }
 /* ---------- AUTO-GERAK saat idle: jalan sendiri jika tak disentuh ---------- */
 var AUTO_DELAY=8,lastInteract=Date.now(),lastAutoDrive=0,autoActive=false,autoDir=1;
+var slideOn=false,slideT0=0,slideDur=8,slideW=0;
+function startSlide(){var maxS=scrollEl.scrollHeight-scrollEl.clientHeight;if(maxS<=0)return;if(cur<0.82)return;slideOn=true;slideT0=clock.elapsedTime;slideW=0.05;autoActive=false;scrollEl.style.scrollBehavior="auto";lastInteract=Date.now();lastAutoDrive=Date.now();}
+function cancelSlide(){if(slideOn){slideOn=false;slideW=0;scrollEl.style.scrollBehavior="";}}
 var autoWarnEl=document.getElementById('autoWarn'),autoWarnT=document.getElementById('autoWarnT');
 scrollEl.addEventListener('scroll',function(){
-  if(autoActive&&(Date.now()-lastAutoDrive)<150)return; /* scroll dari mesin, abaikan */
+  if((autoActive||slideOn)&&(Date.now()-lastAutoDrive)<150)return; /* scroll dari mesin, abaikan */
+  if(slideOn) cancelSlide();
   lastInteract=Date.now();
 },{passive:true});
 ['pointerdown','wheel','touchstart','keydown'].forEach(function(ev){
-  window.addEventListener(ev,function(){lastInteract=Date.now();},{passive:true});
+  window.addEventListener(ev,function(){ if(slideOn) cancelSlide(); lastInteract=Date.now();},{passive:true});
 });
-descend.addEventListener('click',function(){scrollEl.scrollTo({top:0,behavior:'smooth'});});
+descend.addEventListener('click',function(){ if(cur>0.82){ startSlide(); } else {scrollEl.scrollTo({top:0,behavior:'smooth'});} });
 window.addEventListener('resize',function(){camera.aspect=window.innerWidth/window.innerHeight;camera.updateProjectionMatrix();renderer.setSize(window.innerWidth,window.innerHeight);});
 
 /* ---------- BOOT ---------- */
