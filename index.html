@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>WHITEOUT ID — Pendakian Everest</title>
+<meta name="description" content="Pengalaman pendakian scroll-driven dari Basecamp 5.364m ke Summit 8.849m. Gunung prosedural 3D real-time dengan salju, awan, dan badai.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%232373F4'/%3E%3Cpath d='M4 25 L14 9 L19 17 L22 13 L28 25 Z' fill='%23F2F7A0'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="stage"><canvas id="gl"></canvas>
+  <div id="vignette"></div>
+  <div id="grain"></div>
+</div>
+
+<main id="scroll" tabindex="-1">
+  <section id="s0" aria-label="Basecamp"><div class="sr"><h2>00 Basecamp</h2><p>Moraine, tenda, dan dinding es tiga kilometer di atas.</p></div></section>
+  <section id="s1" aria-label="Icefall"><div class="sr"><h2>01 Icefall</h2><p>Labirin serac yang bergerak satu meter per hari.</p></div></section>
+  <section id="s2" aria-label="Cwm"><div class="sr"><h2>02 Cwm</h2><p>Lembah sunyi di antara dua dinding raksasa.</p></div></section>
+  <section id="s3" aria-label="Face"><div class="sr"><h2>03 Face</h2><p>Es biru 50 derajat, satu fixed-line.</p></div></section>
+  <section id="s4" aria-label="8K"><div class="sr"><h2>04 Zona 8K</h2><p>Death zone di atas 8000 meter.</p></div></section>
+  <section id="s5" aria-label="Summit"><div class="sr"><h2>05 Summit</h2><p>8.849 meter, matahari terbit di atas lautan awan.</p></div></section>
+</main>
+
+<div id="ui" aria-hidden="true">
+  <div id="alt" class="halo">
+    <span id="altN">5 364</span>
+    <div class="alt-row"><span id="altUnit">Meter</span><span id="altG">↑ 0</span></div>
+    <div class="alt-row"><span id="altO2">O₂ 100%</span></div>
+  </div>
+  <div id="tag" class="halo"><span id="tagN">00</span><i></i><span id="tagT">Basecamp</span></div>
+
+  <div id="chapters">
+    <article class="ch ch0"><div class="blk">
+      <div class="ch-idx">00 — 5.364 M</div>
+      <div class="ch-t">BASECAMP</div>
+      <div class="ch-s">Sebelum Gunung</div>
+      <p class="ch-p">Ketinggian terakhir di mana tubuh masih setuju. Tenda, tali, oksigen, dan dinding es raksasa di atas moraine.</p>
+      <div class="ch-meta"><span>❄ Salju ringan</span><span>◉ Angin 12 km/h</span></div>
+    </div></article>
+    <article class="ch ch1"><div class="blk">
+      <div class="ch-idx">01 — 5.520 M</div>
+      <div class="ch-t">ICEFALL</div>
+      <div class="ch-s">Labirin Bergerak</div>
+      <p class="ch-p">Gletser berjalan satu meter sehari. Serac, crevasse, dan tangga aluminium. Seberangi sebelum ia sadar.</p>
+      <div class="ch-meta"><span>⚠ Serac aktif</span><span>◉ Angin 28 km/h</span></div>
+    </div></article>
+    <article class="ch ch2"><div class="blk">
+      <div class="ch-idx">02 — 6.800 M</div>
+      <div class="ch-t">CWM</div>
+      <div class="ch-s">Lembah Sunyi</div>
+      <p class="ch-p">Di atas icefall dunia terbuka jadi baskom putih datar. Tak ada angin. Hanya cahaya dan napasmu sendiri.</p>
+      <div class="ch-meta"><span>☀ Silau putih</span><span>◉ Angin 8 km/h</span></div>
+    </div></article>
+    <article class="ch ch3"><div class="blk">
+      <div class="ch-idx">03 — 7.950 M</div>
+      <div class="ch-t">FACE</div>
+      <div class="ch-s">Di Atas Awan</div>
+      <p class="ch-p">Es biru 50 derajat. Satu fixed-line dari anchor ke anchor, cuaca badai jauh di bawah sepatumu.</p>
+      <div class="ch-meta"><span>≋ Badai di bawah</span><span>◉ Angin 55 km/h</span></div>
+    </div></article>
+    <article class="ch ch4"><div class="blk">
+      <div class="ch-idx">04 — 8.720 M</div>
+      <div class="ch-t">8K ZONE</div>
+      <div class="ch-s">Di Atas 8.000 M</div>
+      <p class="ch-p">Batu gelap, salju keras, bintang. Tak ada yang hidup di sini. Kamu hanya meminjam waktu.</p>
+      <div class="ch-meta"><span>★ Oksigen tipis</span><span>◉ Angin 70 km/h</span></div>
+    </div></article>
+    <article class="ch ch5"><div class="blk">
+      <div class="ch-idx">05 — 8.849 M</div>
+      <div class="ch-t">SUMMIT</div>
+      <div class="ch-s">Puncak Dunia</div>
+      <p class="ch-p">Matahari terbit di lautan awan. Semua gunung lain di bumi ada di bawahmu. Tak ada lagi ke atas.</p>
+      <div class="ch-meta"><span>✺ Sunrise +F2F7A0</span><span>◉ Angin 20 km/h</span></div>
+    </div></article>
+  </div>
+
+  <div id="hint" class="halo"><b id="hintT">Scroll untuk mendaki</b><span class="stem"></span></div>
+  <div id="weather" class="halo"><span id="wIcon">❄</span><span id="wText">Salju ringan — 5.364 m</span></div>
+</div>
+
+<nav id="route" aria-label="Rute pendakian">
+  <svg id="routeSvg" viewBox="0 0 96 640" preserveAspectRatio="none" aria-hidden="true">
+    <path id="routeLine"></path>
+    <path id="routeDone"></path>
+  </svg>
+  <div id="routeBtns"></div>
+  <div id="routeMark" aria-hidden="true"></div>
+</nav>
+
+<button id="descend" type="button"><span class="arr"></span><span id="descendT">Turun</span></button>
+
+<div id="toolbar">
+  <button id="btnSound" type="button" title="Suara angin">🔇 <span>Angin Off</span></button>
+  <button id="btnDayNight" type="button" title="Mode siang / malam">◐ <span>Auto</span></button>
+  <button id="btnLang" type="button" title="Bahasa">ID | EN</button>
+</div>
+
+<div id="boot"><div id="bootT">Whiteout</div><div id="bootBar"><i></i></div><div id="bootS">Membaca rute…</div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
