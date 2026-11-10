@@ -84,6 +84,24 @@
         }
         .alarm-hidden { display: none !important; }
 
+        /* ============ LIQUID NEON CHART (ala iqbalsurya) ============ */
+        .liquid-chart {
+            background:
+                radial-gradient(900px 380px at 70% 55%, rgba(21,79,180,.38), transparent 70%),
+                radial-gradient(600px 280px at 20% 30%, rgba(13,50,120,.35), transparent 75%),
+                linear-gradient(160deg, #071233, #030B21);
+            border: 1px solid rgba(59,130,246,.18);
+            border-radius: .75rem;
+            overflow: hidden;
+        }
+        .liquid-chart::before {
+            content: ''; position: absolute; inset: 0; pointer-events: none;
+            background-image:
+                linear-gradient(rgba(96,165,250,.06) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(96,165,250,.06) 1px, transparent 1px);
+            background-size: 48px 48px;
+        }
+
         /* transisi halus gauge value changes */
         #tempGaugeCircle, #flowGaugeCircle {
             transition: stroke-dashoffset .8s cubic-bezier(.22,1,.36,1), stroke .5s ease;
@@ -377,7 +395,7 @@
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="toggleInterp()" id="btnInterp" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs transition">
-                            〰️ Interpolasi: OFF
+                            🌊 Aliran Air: ON
                         </button>
                         <button onclick="clearChartData()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs transition">
                             🧹 Reset Grafik
@@ -387,7 +405,7 @@
                         </span>
                     </div>
                 </div>
-                <div class="h-72 w-full">
+                <div class="liquid-chart h-72 w-full relative p-2">
                     <canvas id="telemetryChart"></canvas>
                 </div>
             </div>
@@ -619,31 +637,63 @@
             return totalDash * (1 - ratio);
         }
 
+        // Plugin glow neon: shadowBlur per-dataset, garis bercahaya seperti plasma
+        const GLOW_COLORS = ['rgba(52,211,153,.9)', 'rgba(34,211,238,.7)', 'rgba(129,140,248,.6)',
+                             'rgba(167,139,250,.6)', 'rgba(192,132,252,.6)'];
+        const glowPlugin = {
+            id: 'glow',
+            beforeDatasetDraw(c, args) {
+                const ctx = c.ctx;
+                ctx.save();
+                ctx.shadowBlur = args.index === 0 ? 16 : 9;
+                ctx.shadowColor = GLOW_COLORS[args.index] || 'rgba(56,189,248,.7)';
+            },
+            afterDatasetDraw(c) {
+                c.ctx.restore();
+            }
+        };
+
+        // Gradient fill "air" di bawah kurva utama (suhu) — menyapu rembet ke bawah
+        const liquidFill = (ctx2, area, c1, c2) => {
+            if (!area) return c2;
+            const g = ctx2.createLinearGradient(0, area.top, 0, area.bottom);
+            g.addColorStop(0, c1);
+            g.addColorStop(1, c2);
+            return g;
+        };
+
         // Initialize Chart.js with Dual Y-Axes & Fixed Scale Ranges
         document.addEventListener('DOMContentLoaded', () => {
             const ctx = document.getElementById('telemetryChart').getContext('2d');
             telemetryChart = new Chart(ctx, {
                 type: 'line',
+                plugins: [glowPlugin],
                 data: {
                     labels: [],
                     datasets: [
                         {
                             label: 'Temp (°C)',
                             data: [],
-                            borderColor: '#EF4444',
-                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            tension: 0,
+                            borderColor: (c) => (stateTemp > 900 ? '#FB7185' : '#34D399'),
+                            backgroundColor: (c) => {
+                                const { ctx: c2, chartArea } = c.chart;
+                                return stateTemp > 900
+                                    ? liquidFill(c2, chartArea, 'rgba(251,113,133,.30)', 'rgba(251,113,133,0)')
+                                    : liquidFill(c2, chartArea, 'rgba(52,211,153,.30)', 'rgba(52,211,153,0)');
+                            },
+                            fill: true,
+                            tension: 0.45,
                             borderWidth: 2.5,
-                            pointRadius: 4,
-                            pointHoverRadius: 6,
+                            pointRadius: 0,
+                            pointHoverRadius: 5,
                             yAxisID: 'yTemp' // Left Axis
                         },
                         {
                             label: 'Flow Rate (L/s)',
                             data: [],
-                            borderColor: '#06B6D4',
+                            borderColor: '#22D3EE',
                             backgroundColor: 'transparent',
-                            tension: 0,
+                            tension: 0.45,
                             borderWidth: 2,
                             pointRadius: 3,
                             pointHoverRadius: 5,
@@ -654,7 +704,7 @@
                             data: [],
                             borderColor: '#6366F1',
                             backgroundColor: 'transparent',
-                            tension: 0,
+                            tension: 0.45,
                             borderWidth: 1.5,
                             pointRadius: 3,
                             pointHoverRadius: 5,
@@ -665,7 +715,7 @@
                             data: [],
                             borderColor: '#A78BFA',
                             backgroundColor: 'transparent',
-                            tension: 0,
+                            tension: 0.45,
                             borderWidth: 1.5,
                             borderDash: [4, 3],
                             pointRadius: 2,
@@ -677,7 +727,7 @@
                             data: [],
                             borderColor: '#C084FC',
                             backgroundColor: 'transparent',
-                            tension: 0,
+                            tension: 0.45,
                             borderWidth: 1.5,
                             borderDash: [4, 3],
                             pointRadius: 2,
@@ -695,7 +745,7 @@
                         intersect: false
                     },
                     plugins: {
-                        legend: { labels: { color: '#94A3B8', font: { size: 10 } } },
+                        legend: { labels: { color: 'rgba(191,219,254,.8)', font: { size: 10 } } },
                         tooltip: {
                             backgroundColor: 'rgba(15, 23, 42, 0.95)',
                             titleColor: '#F8FAFC',
@@ -714,8 +764,8 @@
                     },
                     scales: {
                         x: {
-                            ticks: { color: '#64748B', font: { size: 9 } },
-                            grid: { color: 'rgba(255,255,255,0.05)' }
+                            ticks: { color: 'rgba(147,197,253,.55)', font: { size: 9 } },
+                            grid: { color: 'rgba(96,165,250,.10)' }
                         },
                         yTemp: {
                             type: 'linear',
@@ -724,8 +774,8 @@
                             min: -50,
                             max: 1050, // EXAK: sumbu statis, titik tidak pernah 'melompat' skala
                             title: { display: true, text: 'Temperatur Turbin (°C)', color: '#EF4444', font: { size: 10 } },
-                            ticks: { color: '#EF4444', font: { size: 9 }, callback: (v) => v.toFixed(0) },
-                            grid: { color: 'rgba(239, 68, 68, 0.08)' }
+                            ticks: { color: 'rgba(110,231,183,.75)', font: { size: 9 }, callback: (v) => v.toFixed(0) },
+                            grid: { color: 'rgba(96,165,250,.10)' }
                         },
                         yMetrics: {
                             type: 'linear',
@@ -734,7 +784,7 @@
                             min: -50,
                             max: 250, // EXAK
                             title: { display: true, text: 'Flow (L/s) / Tekanan (Bar)', color: '#06B6D4', font: { size: 10 } },
-                            ticks: { color: '#06B6D4', font: { size: 9 }, callback: (v) => v.toFixed(0) },
+                            ticks: { color: 'rgba(103,232,249,.6)', font: { size: 9 }, callback: (v) => v.toFixed(0) },
                             grid: { drawOnChartArea: false }
                         }
                     }
@@ -885,13 +935,14 @@
             }
         }
 
-        // Toggle smoothing/interpolasi grafik on-off (presisi tajam vs visual lembut)
+        // Toggle aliran air (smooth default) <-> garis tajam presisi
         function toggleInterp() {
+            const smooth = !useInterp;   // useInterp=false artinya mode smooth aktif
             useInterp = !useInterp;
-            const T = useInterp ? 0.4 : 0;
+            const T = smooth ? 0.45 : 0;
             telemetryChart.data.datasets.forEach(ds => ds.tension = T);
             const b = document.getElementById('btnInterp');
-            b.innerHTML = useInterp ? '〰️ Interpolasi: ON' : '📐 Interpolasi: OFF';
+            b.innerHTML = smooth ? '🌊 Aliran Air: ON' : '📐 Garis Tajam: ON';
             telemetryChart.update('none');
         }
 
