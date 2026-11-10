@@ -1,107 +1,695 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="id">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>WHITEOUT ID — Pendakian Everest</title>
-<meta name="description" content="Pengalaman pendakian scroll-driven dari Basecamp 5.364m ke Summit 8.849m. Gunung prosedural 3D real-time dengan salju, awan, dan badai.">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%232373F4'/%3E%3Cpath d='M4 25 L14 9 L19 17 L22 13 L28 25 Z' fill='%23F2F7A0'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Industrial SCADA Telemetry & Field Test Monitor</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Google Fonts (Inter & JetBrains Mono) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    
+    <style>
+        /* Industrial Dark Theme & Gauge Styles */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0B0F19;
+            color: #E5E7EB;
+        }
+
+        .font-mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .glass-card {
+            background: rgba(17, 24, 39, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .gauge-meter {
+            transition: stroke-dashoffset 0.5s ease, stroke 0.5s ease;
+        }
+
+        /* Custom scrollbar for log table */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0F172A;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #475569;
+        }
+    </style>
 </head>
-<body>
+<body class="min-h-screen p-4 lg:p-6 text-slate-200">
 
-<div id="stage"><canvas id="gl"></canvas>
-  <div id="vignette"></div>
-  <div id="grain"></div>
-</div>
+    <!-- Top Navigation Bar -->
+    <header class="glass-card rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-cyan-500">
+        <div class="flex items-center gap-3">
+            <div class="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/30">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-white tracking-wide flex items-center gap-2">
+                    SCADA Telemetry System
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">v2.5 Accurate Dual-Axis</span>
+                </h1>
+                <p class="text-xs text-slate-400">Monitoring & Pengujian Kinerja Sistem Industri Real-Time (Support Nilai Minus / Sub-Zero)</p>
+            </div>
+        </div>
 
-<main id="scroll" tabindex="-1">
-  <section id="s0" aria-label="Basecamp"><div class="sr"><h2>00 Basecamp</h2><p>Moraine, tenda, dan dinding es tiga kilometer di atas.</p></div></section>
-  <section id="s1" aria-label="Icefall"><div class="sr"><h2>01 Icefall</h2><p>Labirin serac yang bergerak satu meter per hari.</p></div></section>
-  <section id="s2" aria-label="Cwm"><div class="sr"><h2>02 Cwm</h2><p>Lembah sunyi di antara dua dinding raksasa.</p></div></section>
-  <section id="s3" aria-label="Face"><div class="sr"><h2>03 Face</h2><p>Es biru 50 derajat, satu fixed-line.</p></div></section>
-  <section id="s4" aria-label="8K"><div class="sr"><h2>04 Zona 8K</h2><p>Death zone di atas 8000 meter.</p></div></section>
-  <section id="s5" aria-label="Summit"><div class="sr"><h2>05 Summit</h2><p>8.849 meter, matahari terbit di atas lautan awan.</p></div></section>
-</main>
+        <!-- System Mode Controls -->
+        <div class="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
+            <button id="modeSimBtn" onclick="switchMode('sim')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20">
+                ⚡ Auto Simulation
+            </button>
+            <button id="modeManualBtn" onclick="switchMode('manual')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all">
+                🛠️ Field Input Test
+            </button>
+        </div>
+    </header>
 
-<div id="ui" aria-hidden="true">
-  <div id="alt" class="halo">
-    <span id="altN">5 364</span>
-    <div class="alt-row"><span id="altUnit">Meter</span><span id="altG">↑ 0</span></div>
-    <div class="alt-row"><span id="altO2">O₂ 100%</span></div>
-  </div>
-  <div id="tag" class="halo"><span id="tagN">00</span><i></i><span id="tagT">Basecamp</span></div>
+    <!-- Main Grid Layout -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-  <div id="chapters">
-    <article class="ch ch0"><div class="blk">
-      <div class="ch-idx">00 — 5.364 M</div>
-      <div class="ch-t">BASECAMP</div>
-      <div class="ch-s">Sebelum Gunung</div>
-      <p class="ch-p">Ketinggian terakhir di mana tubuh masih setuju. Tenda, tali, oksigen, dan dinding es raksasa di atas moraine.</p>
-      <div class="ch-meta"><span>❄ Salju ringan</span><span>◉ Angin 12 km/h</span></div>
-    </div></article>
-    <article class="ch ch1"><div class="blk">
-      <div class="ch-idx">01 — 5.520 M</div>
-      <div class="ch-t">ICEFALL</div>
-      <div class="ch-s">Labirin Bergerak</div>
-      <p class="ch-p">Gletser berjalan satu meter sehari. Serac, crevasse, dan tangga aluminium. Seberangi sebelum ia sadar.</p>
-      <div class="ch-meta"><span>⚠ Serac aktif</span><span>◉ Angin 28 km/h</span></div>
-    </div></article>
-    <article class="ch ch2"><div class="blk">
-      <div class="ch-idx">02 — 6.800 M</div>
-      <div class="ch-t">CWM</div>
-      <div class="ch-s">Lembah Sunyi</div>
-      <p class="ch-p">Di atas icefall dunia terbuka jadi baskom putih datar. Tak ada angin. Hanya cahaya dan napasmu sendiri.</p>
-      <div class="ch-meta"><span>☀ Silau putih</span><span>◉ Angin 8 km/h</span></div>
-    </div></article>
-    <article class="ch ch3"><div class="blk">
-      <div class="ch-idx">03 — 7.950 M</div>
-      <div class="ch-t">FACE</div>
-      <div class="ch-s">Di Atas Awan</div>
-      <p class="ch-p">Es biru 50 derajat. Satu fixed-line dari anchor ke anchor, cuaca badai jauh di bawah sepatumu.</p>
-      <div class="ch-meta"><span>≋ Badai di bawah</span><span>◉ Angin 55 km/h</span></div>
-    </div></article>
-    <article class="ch ch4"><div class="blk">
-      <div class="ch-idx">04 — 8.720 M</div>
-      <div class="ch-t">8K ZONE</div>
-      <div class="ch-s">Di Atas 8.000 M</div>
-      <p class="ch-p">Batu gelap, salju keras, bintang. Tak ada yang hidup di sini. Kamu hanya meminjam waktu.</p>
-      <div class="ch-meta"><span>★ Oksigen tipis</span><span>◉ Angin 70 km/h</span></div>
-    </div></article>
-    <article class="ch ch5"><div class="blk">
-      <div class="ch-idx">05 — 8.849 M</div>
-      <div class="ch-t">SUMMIT</div>
-      <div class="ch-s">Puncak Dunia</div>
-      <p class="ch-p">Matahari terbit di lautan awan. Semua gunung lain di bumi ada di bawahmu. Tak ada lagi ke atas.</p>
-      <div class="ch-meta"><span>✺ Sunrise +F2F7A0</span><span>◉ Angin 20 km/h</span></div>
-    </div></article>
-  </div>
+        <!-- Left Column: Speedometers & Visual Gauges (8 Cols) -->
+        <div class="lg:col-span-8 space-y-6">
 
-  <div id="hint" class="halo"><b id="hintT">Scroll untuk mendaki</b><span class="stem"></span></div>
-  <div id="autoWarn"><span id="autoWarnT"></span></div>
-  <div id="weather" class="halo"><span id="wIcon">❄</span><span id="wText">Salju ringan — 5.364 m</span></div>
-</div>
+            <!-- Speedometer Cards Grid -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
 
-<nav id="route" aria-label="Rute pendakian">
-  <svg id="routeSvg" viewBox="0 0 96 640" preserveAspectRatio="none" aria-hidden="true">
-    <path id="routeLine"></path>
-    <path id="routeDone"></path>
-  </svg>
-  <div id="routeBtns"></div>
-  <div id="routeMark" aria-hidden="true"></div>
-</nav>
+                <!-- 1. Turbine Temp Gauge -->
+                <div class="glass-card rounded-2xl p-5 relative overflow-hidden flex flex-col items-center text-center">
+                    <span class="text-xs font-semibold text-slate-400 tracking-wider uppercase self-start mb-2">Temperatur Turbin</span>
+                    <div class="relative w-40 h-40 flex items-center justify-center">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="48" stroke="#1E293B" stroke-width="10" fill="none" />
+                            <circle id="tempGaugeCircle" cx="60" cy="60" r="48" stroke="#10B981" stroke-width="10" stroke-dasharray="301.59" stroke-dashoffset="100" stroke-linecap="round" fill="none" class="gauge-meter" />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="tempVal" class="text-3xl font-extrabold font-mono text-white">450</span>
+                            <span class="text-xs font-medium text-slate-400">°C</span>
+                        </div>
+                    </div>
+                    <div class="w-full flex justify-between text-[11px] text-slate-400 font-mono mt-2 border-t border-slate-800 pt-2">
+                        <span>Min: -50°C</span>
+                        <span id="tempStatus" class="text-emerald-400 font-bold">NORMAL</span>
+                        <span>Max: 1000°C</span>
+                    </div>
+                </div>
 
-<button id="descend" type="button"><span class="arr"></span><span id="descendT">Turun</span></button>
+                <!-- 2. Flow Rate Gauge -->
+                <div class="glass-card rounded-2xl p-5 relative overflow-hidden flex flex-col items-center text-center">
+                    <span class="text-xs font-semibold text-slate-400 tracking-wider uppercase self-start mb-2">Laju Aliran (Flow Rate)</span>
+                    <div class="relative w-40 h-40 flex items-center justify-center">
+                        <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
+                            <circle cx="60" cy="60" r="48" stroke="#1E293B" stroke-width="10" fill="none" />
+                            <circle id="flowGaugeCircle" cx="60" cy="60" r="48" stroke="#06B6D4" stroke-width="10" stroke-dasharray="301.59" stroke-dashoffset="120" stroke-linecap="round" fill="none" class="gauge-meter" />
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <span id="flowVal" class="text-3xl font-extrabold font-mono text-white">128.5</span>
+                            <span class="text-xs font-medium text-slate-400">Liter / detik</span>
+                        </div>
+                    </div>
+                    <div class="w-full flex justify-between text-[11px] text-slate-400 font-mono mt-2 border-t border-slate-800 pt-2">
+                        <span>Min: -50 L/s</span>
+                        <span id="flowStatus" class="text-cyan-400 font-bold">STABLE</span>
+                        <span>Max: 250 L/s</span>
+                    </div>
+                </div>
 
-<div id="toolbar">
-  <button id="btnSound" type="button" title="Suara angin">🔇 <span>Angin Off</span></button>
-  <button id="btnDayNight" type="button" title="Mode siang / malam">◐ <span>Auto</span></button>
-  <button id="btnLang" type="button" title="Bahasa">ID | EN</button>
-</div>
+                <!-- 3. Energy Balance Gauge -->
+                <div class="glass-card rounded-2xl p-5 relative overflow-hidden flex flex-col items-center justify-between sm:col-span-2 xl:col-span-1">
+                    <span class="text-xs font-semibold text-slate-400 tracking-wider uppercase self-start mb-1">Neraca Energi & Efisiensi</span>
+                    
+                    <div class="w-full space-y-3 my-auto">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400">Energi Masuk (In)</span>
+                                <span id="energyInVal" class="font-mono text-cyan-400 font-bold">1,250 kW</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2">
+                                <div id="energyInBar" class="bg-cyan-500 h-2 rounded-full transition-all duration-500" style="width: 75%"></div>
+                            </div>
+                        </div>
 
-<div id="boot"><div id="bootT">Whiteout</div><div id="bootBar"><i></i></div><div id="bootS">Membaca rute…</div></div>
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-slate-400">Energi Keluar (Out)</span>
+                                <span id="energyOutVal" class="font-mono text-emerald-400 font-bold">1,062 kW</span>
+                            </div>
+                            <div class="w-full bg-slate-800 rounded-full h-2">
+                                <div id="energyOutBar" class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 64%"></div>
+                            </div>
+                        </div>
+                    </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="app.js"></script>
+                    <div class="w-full flex items-center justify-between bg-slate-900/90 p-2.5 rounded-xl border border-slate-800 text-xs mt-2">
+                        <span class="text-slate-400">Thermal Efficiency:</span>
+                        <span id="efficiencyVal" class="font-mono font-bold text-amber-400">84.96 %</span>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Pressure Multi-Channel Monitor Bar -->
+            <div class="glass-card rounded-2xl p-5">
+                <h3 class="text-sm font-semibold text-slate-300 mb-4 flex items-center justify-between">
+                    <span>Tekanan di Masing-Masing Saluran (Channel Pressure)</span>
+                    <span class="text-xs font-mono text-slate-500">Skala Vacuum/Hi-Press (-10 s/d 100 Bar)</span>
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Channel 1 -->
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-medium text-slate-400">Saluran A (Inlet)</span>
+                            <span id="p1Val" class="font-mono text-sm font-bold text-cyan-400">42.5 Bar</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-2.5">
+                            <div id="p1Bar" class="bg-cyan-500 h-2.5 rounded-full transition-all" style="width: 70%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Channel 2 -->
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-medium text-slate-400">Saluran B (Main Valve)</span>
+                            <span id="p2Val" class="font-mono text-sm font-bold text-indigo-400">38.0 Bar</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-2.5">
+                            <div id="p2Bar" class="bg-indigo-500 h-2.5 rounded-full transition-all" style="width: 63%"></div>
+                        </div>
+                    </div>
+
+                    <!-- Channel 3 -->
+                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-xs font-medium text-slate-400">Saluran C (Outlet)</span>
+                            <span id="p3Val" class="font-mono text-sm font-bold text-purple-400">14.2 Bar</span>
+                        </div>
+                        <div class="w-full bg-slate-800 rounded-full h-2.5">
+                            <div id="p3Bar" class="bg-purple-500 h-2.5 rounded-full transition-all" style="width: 28%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Real-Time Trend Line Chart -->
+            <div class="glass-card rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-sm font-semibold text-slate-300">Grafik Analisis Tren Presisi (Dual Skala Sumbu-Y)</h3>
+                        <p class="text-[11px] text-slate-400">Temp (Kiri: °C) vs Flow & Tekanan (Kanan: L/s & Bar)</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="clearChartData()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs transition">
+                            🧹 Reset Grafik
+                        </button>
+                        <span class="inline-flex items-center gap-1 text-[11px] text-emerald-400 bg-emerald-500/10 px-2 py-1 rounded border border-emerald-500/20">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> Streaming Live
+                        </span>
+                    </div>
+                </div>
+                <div class="h-72 w-full">
+                    <canvas id="telemetryChart"></canvas>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- Right Column: Manual Input Form & Telemetry Cloud Log (4 Cols) -->
+        <div class="lg:col-span-4 space-y-6">
+
+            <!-- Workplace Preset Shortcuts -->
+            <div class="glass-card rounded-2xl p-5 border-t-2 border-t-amber-500">
+                <h3 class="text-sm font-semibold text-white mb-1">Preset Pengujian Lapangan</h3>
+                <p class="text-xs text-slate-400 mb-3">Pilih skenario beban (termasuk kondisi ekstrem / minus):</p>
+
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="applyPreset('pltu')" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-left rounded-xl border border-slate-800 transition text-xs">
+                        <div class="font-bold text-amber-400">PLTU Steam Turbine</div>
+                        <div class="text-[10px] text-slate-400">680°C / 62 Bar</div>
+                    </button>
+                    <button onclick="applyPreset('cryo')" class="p-2.5 bg-cyan-950/40 hover:bg-cyan-900/50 text-left rounded-xl border border-cyan-800/40 transition text-xs">
+                        <div class="font-bold text-cyan-300">Cryogenic / Sub-Zero</div>
+                        <div class="text-[10px] text-cyan-400/80">-40°C / Vacuum</div>
+                    </button>
+                    <button onclick="applyPreset('hvac')" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-left rounded-xl border border-slate-800 transition text-xs">
+                        <div class="font-bold text-emerald-400">Chiller / HVAC</div>
+                        <div class="text-[10px] text-slate-400">-5°C Cold Loop</div>
+                    </button>
+                    <button onclick="applyPreset('leak')" class="p-2.5 bg-rose-950/40 hover:bg-rose-900/50 text-left rounded-xl border border-rose-800/40 transition text-xs">
+                        <div class="font-bold text-rose-400">Kebocoran Tekanan</div>
+                        <div class="text-[10px] text-rose-300/70">Vacuum Drop</div>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Manual Data Entry Form -->
+            <div id="manualInputSection" class="glass-card rounded-2xl p-5 border-t-2 border-t-cyan-500">
+                <h3 class="text-sm font-semibold text-white mb-1 flex items-center justify-between">
+                    <span>Input Telemetri Manual</span>
+                    <span id="fieldBadge" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded">Bisa Nilai Minus</span>
+                </h3>
+                <p class="text-[11px] text-slate-400 mb-3">Setiap klik "Kirim Data" akan menambah titik baru pada grafik secara akurat.</p>
+
+                <form id="telemetryForm" onsubmit="handleManualSubmit(event)" class="space-y-3">
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[11px] font-medium text-slate-400 block mb-1">Temp Turbin (°C)</label>
+                            <input type="number" step="0.1" id="inputTemp" value="-15.5" min="-50" max="1000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-medium text-slate-400 block mb-1">Flow Rate (L/s)</label>
+                            <input type="number" step="0.1" id="inputFlow" value="85.0" min="-50" max="250" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-2">
+                        <div>
+                            <label class="text-[10px] font-medium text-slate-400 block mb-1">Tekanan 1 (Bar)</label>
+                            <input type="number" step="0.1" id="inputP1" value="-2.5" min="-10" max="100" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-medium text-slate-400 block mb-1">Tekanan 2 (Bar)</label>
+                            <input type="number" step="0.1" id="inputP2" value="-5.0" min="-10" max="100" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                        <div>
+                            <label class="text-[10px] font-medium text-slate-400 block mb-1">Tekanan 3 (Bar)</label>
+                            <input type="number" step="0.1" id="inputP3" value="-8.2" min="-10" max="100" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-[11px] font-medium text-slate-400 block mb-1">Energi Masuk (kW)</label>
+                            <input type="number" id="inputEnergyIn" value="800" min="-500" max="3000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                        <div>
+                            <label class="text-[11px] font-medium text-slate-400 block mb-1">Energi Keluar (kW)</label>
+                            <input type="number" id="inputEnergyOut" value="680" min="-500" max="3000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="w-full py-2 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/20 transition-all mt-2">
+                        🚀 Kirim Data Ke Grafik & Gauge
+                    </button>
+                </form>
+            </div>
+
+            <!-- Telemetry History Cloud Storage Table & Export -->
+            <div class="glass-card rounded-2xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <div>
+                        <h3 class="text-sm font-semibold text-white">Riwayat Database Cloud</h3>
+                        <p class="text-[11px] text-slate-400">Data tersimpan otomatis di Cloud</p>
+                    </div>
+                    <button onclick="exportCSV()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition flex items-center gap-1">
+                        📥 Export CSV
+                    </button>
+                </div>
+
+                <!-- Log Table -->
+                <div class="overflow-x-auto max-h-60 rounded-xl border border-slate-800">
+                    <table class="w-full text-left text-[11px] font-mono">
+                        <thead class="bg-slate-900 text-slate-400 sticky top-0">
+                            <tr>
+                                <th class="p-2">Waktu</th>
+                                <th class="p-2">Temp</th>
+                                <th class="p-2">Flow</th>
+                                <th class="p-2">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logTableBody" class="divide-y divide-slate-800/60 text-slate-300">
+                            <!-- Filled dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- Application JavaScript Logic -->
+    <script>
+        // State Variables
+        let isSimulating = true;
+        let logsHistory = [];
+        let telemetryChart;
+
+        // Helper: Gauge offset calculation with support for negative min/max ranges
+        function calculateGaugeOffset(val, minVal, maxVal) {
+            const totalDash = 301.59; // Circumference for r=48 circle
+            const clamped = Math.max(minVal, Math.min(maxVal, val));
+            const ratio = (clamped - minVal) / (maxVal - minVal);
+            return totalDash * (1 - ratio);
+        }
+
+        // Initialize Chart.js with Dual Y-Axes for maximum precision
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctx = document.getElementById('telemetryChart').getContext('2d');
+            telemetryChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Temp (°C)',
+                            data: [],
+                            borderColor: '#EF4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            tension: 0.2,
+                            borderWidth: 2,
+                            pointRadius: 4,
+                            pointHoverRadius: 6,
+                            yAxisID: 'yTemp' // Dedicated Y-Axis for Temp
+                        },
+                        {
+                            label: 'Flow Rate (L/s)',
+                            data: [],
+                            borderColor: '#06B6D4',
+                            backgroundColor: 'transparent',
+                            tension: 0.2,
+                            borderWidth: 2,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                            yAxisID: 'yMetrics' // Secondary Y-Axis for Flow/Press
+                        },
+                        {
+                            label: 'Tekanan Saluran 1 (Bar)',
+                            data: [],
+                            borderColor: '#6366F1',
+                            backgroundColor: 'transparent',
+                            tension: 0.2,
+                            borderWidth: 1.5,
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                            yAxisID: 'yMetrics' // Secondary Y-Axis for Flow/Press
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#94A3B8', font: { size: 10 } } },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#F8FAFC',
+                            bodyColor: '#E2E8F0',
+                            borderColor: 'rgba(255, 255, 255, 0.1)',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: { 
+                            ticks: { color: '#64748B', font: { size: 9 } }, 
+                            grid: { color: 'rgba(255,255,255,0.05)' } 
+                        },
+                        yTemp: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: { display: true, text: 'Temp (°C)', color: '#EF4444', font: { size: 10 } },
+                            ticks: { color: '#EF4444', font: { size: 9 } },
+                            grid: { color: 'rgba(239, 68, 68, 0.08)' }
+                        },
+                        yMetrics: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: { display: true, text: 'Flow (L/s) / Tekanan (Bar)', color: '#06B6D4', font: { size: 10 } },
+                            ticks: { color: '#06B6D4', font: { size: 9 } },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+
+            // Initial First Data Load
+            updateDashboard(480, 130, 45, 39, 15, 1300, 1105);
+
+            // Auto Simulation Loop (Interval 2 Sec)
+            setInterval(() => {
+                if (!isSimulating) return;
+
+                const baseTemp = 480 + (Math.random() * 40 - 20);
+                const baseFlow = 130 + (Math.random() * 10 - 5);
+                const p1 = 45 + (Math.random() * 4 - 2);
+                const p2 = p1 - (4 + Math.random() * 2);
+                const p3 = p2 - (20 + Math.random() * 3);
+                const eIn = 1300 + Math.round(Math.random() * 100 - 50);
+                const eOut = Math.round(eIn * (0.82 + Math.random() * 0.05));
+
+                updateDashboard(baseTemp, baseFlow, p1, p2, p3, eIn, eOut);
+            }, 2000);
+        });
+
+        // Switch Operating Modes (Simulation vs Manual Field Test)
+        function switchMode(mode) {
+            const simBtn = document.getElementById('modeSimBtn');
+            const manualBtn = document.getElementById('modeManualBtn');
+            const badge = document.getElementById('fieldBadge');
+            
+            if (mode === 'sim') {
+                isSimulating = true;
+                simBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20";
+                manualBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+                if (badge) {
+                    badge.innerText = "Auto Simulation Active";
+                    badge.className = "text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded";
+                }
+            } else {
+                isSimulating = false;
+                manualBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20";
+                simBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition-all";
+                if (badge) {
+                    badge.innerText = "Field Test (Manual Output Fixed)";
+                    badge.className = "text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded";
+                }
+            }
+        }
+
+        // Clear Chart Points (For starting a clean test session)
+        function clearChartData() {
+            if (telemetryChart) {
+                telemetryChart.data.labels = [];
+                telemetryChart.data.datasets.forEach(ds => ds.data = []);
+                telemetryChart.update();
+            }
+        }
+
+        // Update Dashboard Display with New Telemetry Data
+        function updateDashboard(temp, flow, p1, p2, p3, eIn, eOut) {
+            // 1. Update Temperature Meter (Range -50°C to 1000°C)
+            document.getElementById('tempVal').innerText = parseFloat(temp).toFixed(1);
+            const tempOffset = calculateGaugeOffset(temp, -50, 1000);
+            const tempCircle = document.getElementById('tempGaugeCircle');
+            tempCircle.style.strokeDashoffset = tempOffset;
+
+            const tempStatus = document.getElementById('tempStatus');
+            if (temp < 0) {
+                tempCircle.style.stroke = "#38BDF8"; // Sub-zero Sky Blue
+                tempStatus.innerText = "SUB-ZERO";
+                tempStatus.className = "text-sky-400 font-bold animate-pulse";
+            } else if (temp > 700) {
+                tempCircle.style.stroke = "#EF4444"; // Red Critical
+                tempStatus.innerText = "CRITICAL";
+                tempStatus.className = "text-rose-500 font-bold animate-pulse";
+            } else if (temp > 550) {
+                tempCircle.style.stroke = "#F59E0B"; // Amber Warning
+                tempStatus.innerText = "WARNING";
+                tempStatus.className = "text-amber-400 font-bold";
+            } else {
+                tempCircle.style.stroke = "#10B981"; // Emerald Normal
+                tempStatus.innerText = "NORMAL";
+                tempStatus.className = "text-emerald-400 font-bold";
+            }
+
+            // 2. Update Flow Meter (Range -50 L/s to 250 L/s)
+            document.getElementById('flowVal').innerText = parseFloat(flow).toFixed(1);
+            const flowOffset = calculateGaugeOffset(flow, -50, 250);
+            const flowCircle = document.getElementById('flowGaugeCircle');
+            flowCircle.style.strokeDashoffset = flowOffset;
+
+            const flowStatus = document.getElementById('flowStatus');
+            if (flow < 0) {
+                flowCircle.style.stroke = "#A855F7"; // Purple Reverse Flow
+                flowStatus.innerText = "REVERSE";
+                flowStatus.className = "text-purple-400 font-bold";
+            } else {
+                flowCircle.style.stroke = "#06B6D4";
+                flowStatus.innerText = "STABLE";
+                flowStatus.className = "text-cyan-400 font-bold";
+            }
+
+            // 3. Update Pressure Channels (Range -10 Bar to 100 Bar)
+            document.getElementById('p1Val').innerText = `${parseFloat(p1).toFixed(1)} Bar`;
+            document.getElementById('p2Val').innerText = `${parseFloat(p2).toFixed(1)} Bar`;
+            document.getElementById('p3Val').innerText = `${parseFloat(p3).toFixed(1)} Bar`;
+            
+            // Scale progress bars from -10 to 100 Bar
+            const calcPct = (val) => Math.max(0, Math.min(100, ((val - (-10)) / (100 - (-10))) * 100));
+            document.getElementById('p1Bar').style.width = `${calcPct(p1)}%`;
+            document.getElementById('p2Bar').style.width = `${calcPct(p2)}%`;
+            document.getElementById('p3Bar').style.width = `${calcPct(p3)}%`;
+
+            // 4. Update Energy & Efficiency (Range -500 kW to 3000 kW)
+            document.getElementById('energyInVal').innerText = `${parseFloat(eIn).toLocaleString()} kW`;
+            document.getElementById('energyOutVal').innerText = `${parseFloat(eOut).toLocaleString()} kW`;
+            
+            const energyCalcPct = (val) => Math.max(0, Math.min(100, ((val - (-500)) / (3000 - (-500))) * 100));
+            document.getElementById('energyInBar').style.width = `${energyCalcPct(eIn)}%`;
+            document.getElementById('energyOutBar').style.width = `${energyCalcPct(eOut)}%`;
+
+            const eff = eIn !== 0 ? ((eOut / eIn) * 100).toFixed(2) : 0;
+            document.getElementById('efficiencyVal').innerText = `${eff} %`;
+
+            // 5. Update Real-Time Chart Accurately
+            const nowTime = new Date().toLocaleTimeString();
+            if (telemetryChart) {
+                // Limit max data points on graph to 20
+                if (telemetryChart.data.labels.length >= 20) {
+                    telemetryChart.data.labels.shift();
+                    telemetryChart.data.datasets[0].data.shift();
+                    telemetryChart.data.datasets[1].data.shift();
+                    telemetryChart.data.datasets[2].data.shift();
+                }
+                telemetryChart.data.labels.push(nowTime);
+                telemetryChart.data.datasets[0].data.push(temp);
+                telemetryChart.data.datasets[1].data.push(flow);
+                telemetryChart.data.datasets[2].data.push(p1);
+                telemetryChart.update();
+            }
+
+            // 6. Append to Cloud Storage Table
+            addLogRecord(nowTime, temp, flow, p1, eff);
+        }
+
+        // Add Log Record to Table & Memory
+        function addLogRecord(time, temp, flow, p1, eff) {
+            const status = temp < 0 ? '<span class="text-sky-400 font-bold">SUB-ZERO</span>' :
+                          temp > 700 ? '<span class="text-rose-400 font-bold">CRITICAL</span>' : 
+                          temp > 550 ? '<span class="text-amber-400 font-bold">WARNING</span>' : 
+                          '<span class="text-emerald-400">NORMAL</span>';
+
+            const statusText = temp < 0 ? 'SUB-ZERO' : temp > 700 ? 'CRITICAL' : temp > 550 ? 'WARNING' : 'NORMAL';
+
+            logsHistory.unshift({ 
+                time, 
+                temp: parseFloat(temp).toFixed(1), 
+                flow: parseFloat(flow).toFixed(1), 
+                p1: parseFloat(p1).toFixed(1), 
+                eff, 
+                statusText 
+            });
+            
+            if (logsHistory.length > 50) logsHistory.pop();
+
+            const tbody = document.getElementById('logTableBody');
+            if (tbody) {
+                const newRow = document.createElement('tr');
+                newRow.className = "hover:bg-slate-800/40 border-b border-slate-800/40";
+                newRow.innerHTML = `
+                    <td class="p-2 text-slate-400">${time}</td>
+                    <td class="p-2 font-bold">${parseFloat(temp).toFixed(1)}°C</td>
+                    <td class="p-2 text-cyan-300">${parseFloat(flow).toFixed(1)} L/s</td>
+                    <td class="p-2">${status}</td>
+                `;
+                tbody.insertBefore(newRow, tbody.firstChild);
+            }
+        }
+
+        // Handle Manual Form Submission
+        function handleManualSubmit(e) {
+            e.preventDefault();
+            // Turn off automatic random simulation when manual data is entered
+            switchMode('manual');
+
+            const temp = parseFloat(document.getElementById('inputTemp').value);
+            const flow = parseFloat(document.getElementById('inputFlow').value);
+            const p1 = parseFloat(document.getElementById('inputP1').value);
+            const p2 = parseFloat(document.getElementById('inputP2').value);
+            const p3 = parseFloat(document.getElementById('inputP3').value);
+            const eIn = parseFloat(document.getElementById('inputEnergyIn').value);
+            const eOut = parseFloat(document.getElementById('inputEnergyOut').value);
+
+            updateDashboard(temp, flow, p1, p2, p3, eIn, eOut);
+        }
+
+        // Preset Apply Function (Including Sub-Zero & Vacuum Scenarios)
+        function applyPreset(type) {
+            switchMode('manual');
+            if (type === 'pltu') {
+                document.getElementById('inputTemp').value = 680.0;
+                document.getElementById('inputFlow').value = 195.5;
+                document.getElementById('inputP1').value = 62.0;
+                document.getElementById('inputP2').value = 55.4;
+                document.getElementById('inputP3').value = 22.1;
+                document.getElementById('inputEnergyIn').value = 1850;
+                document.getElementById('inputEnergyOut').value = 1610;
+            } else if (type === 'cryo') {
+                document.getElementById('inputTemp').value = -42.5;
+                document.getElementById('inputFlow').value = 120.0;
+                document.getElementById('inputP1').value = -5.0;
+                document.getElementById('inputP2').value = -7.2;
+                document.getElementById('inputP3').value = -9.0;
+                document.getElementById('inputEnergyIn').value = 650;
+                document.getElementById('inputEnergyOut').value = 580;
+            } else if (type === 'hvac') {
+                document.getElementById('inputTemp').value = -8.0;
+                document.getElementById('inputFlow').value = 65.0;
+                document.getElementById('inputP1').value = 12.5;
+                document.getElementById('inputP2').value = 10.0;
+                document.getElementById('inputP3').value = 4.2;
+                document.getElementById('inputEnergyIn').value = 450;
+                document.getElementById('inputEnergyOut').value = 390;
+            } else if (type === 'leak') {
+                document.getElementById('inputTemp').value = 760.0;
+                document.getElementById('inputFlow').value = -25.0;
+                document.getElementById('inputP1').value = -8.5;
+                document.getElementById('inputP2').value = -9.2;
+                document.getElementById('inputP3').value = -9.8;
+                document.getElementById('inputEnergyIn').value = 1600;
+                document.getElementById('inputEnergyOut').value = 200;
+            }
+            document.getElementById('telemetryForm').requestSubmit();
+        }
+
+        // Export Log Data to CSV File
+        function exportCSV() {
+            if (logsHistory.length === 0) return alert('Belum ada data riwayat telemetri.');
+            
+            let csvContent = "data:text/csv;charset=utf-8,Waktu,Temperatur(C),FlowRate(L/s),TekananCh1(Bar),Efisiensi(%),Status\n";
+            logsHistory.forEach(r => {
+                csvContent += `${r.time},${r.temp},${r.flow},${r.p1},${r.eff},${r.statusText}\n`;
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `Telemetry_Log_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
 </body>
 </html>
