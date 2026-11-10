@@ -69,9 +69,9 @@
             <div>
                 <h1 class="text-xl font-bold text-white tracking-wide flex items-center gap-2">
                     SCADA Telemetry System
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">v2.6 Fixed Precision</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">v3.0 DB Storage + 1s Precision</span>
                 </h1>
-                <p class="text-xs text-slate-400">Monitoring & Pengujian Kinerja Sistem Industri Real-Time</p>
+                <p class="text-xs text-slate-400">Monitoring &amp; Pengujian Kinerja Sistem Industri Real-Time — penampungan IndexedDB persisten, sampling 1 detik</p>
             </div>
         </div>
 
@@ -216,9 +216,12 @@
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h3 class="text-sm font-semibold text-slate-300">Grafik Tren Presisi (Dual Skala Sumbu-Y)</h3>
-                        <p class="text-[11px] text-slate-400">Sumbu Kiri: Suhu (°C) | Sumbu Kanan: Flow (L/s) & Tekanan (Bar) — sampling 1 detik, jendela 25 titik</p>
+                        <p class="text-[11px] text-slate-400">Sumbu Kiri: Suhu (°C) | Sumbu Kanan: Flow (L/s) &amp; Tekanan (Bar) — sampling 1 detik, presisi titik eksak</p>
                     </div>
                     <div class="flex items-center gap-2">
+                        <button onclick="toggleInterp()" id="btnInterp" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs transition">
+                            〰️ Interpolasi: OFF
+                        </button>
                         <button onclick="clearChartData()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs transition">
                             🧹 Reset Grafik
                         </button>
@@ -311,6 +314,9 @@
                     <button type="submit" class="w-full py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs rounded-xl shadow-lg shadow-cyan-500/20 transition-all mt-2">
                         🚀 Kirim Data Ke Grafik & Gauge
                     </button>
+                    <button type="button" onclick="clearAllDbData()" class="w-full py-2 bg-rose-950/40 hover:bg-rose-900/50 border border-rose-800/40 text-rose-300 text-xs font-semibold rounded-xl transition-all mt-1">
+                        🗑️ Hapus Semua Data Penampungan
+                    </button>
                 </form>
             </div>
 
@@ -319,7 +325,7 @@
                 <div class="flex items-center justify-between mb-3">
                     <div>
                         <h3 class="text-sm font-semibold text-white">Riwayat Database Cloud</h3>
-                        <p class="text-[11px] text-slate-400">Data tersimpan otomatis di Cloud</p>
+                        <p id="dbCount" class="text-[11px] text-slate-400">Data tersimpan otomatis (IndexedDB persisten)</p>
                     </div>
                     <button onclick="exportCSV()" class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-lg text-xs font-medium transition flex items-center gap-1">
                         📥 Export CSV
@@ -356,6 +362,9 @@
         let isSimulating = false; // Mulai OFF: Field Input Test aktif sejak load
         let logsHistory = [];
         let telemetryChart;
+        let useInterp = false;      // interpolasi halus on/off
+        let readyToPersist = false; // false = seed data bootstrap tidak tersimpan
+        let autoid = 1;             // counter urut data
 
         // Baseline state: jadi acuan apabila Auto Simulation dinyalakan kembali
         let stateTemp = 480;
@@ -365,6 +374,62 @@
         let stateP3 = 15;
         let stateEIn = 1300;
         let stateEOut = 1105;
+
+        /* ---------- IndexedDB Penampungan Persisten ---------- */
+        let DB = null;
+        function openDB(cb) {
+            const rq = indexedDB.open('scada_telemetry_db', 1);
+            rq.onupgradeneeded = (e) => {
+                const db = e.target.result;
+                if (!db.objectStoreNames.contains('logs')) {
+                    const os = db.createObjectStore('logs', { keyPath: 'idx', autoIncrement: true });
+                    os.createIndex('time', 'time', { unique: false });
+                }
+            };
+            rq.onsuccess = (e) => { DB = e.target.result; if (cb) cb(DB); };
+            rq.onerror = (e) => { console.error('IndexedDB gagal', e); };
+        }
+        function dbPut(rec, cb) {
+            if (!DB) { if (cb) cb(); return; }
+            try {
+                const tx = DB.transaction('logs', 'readwrite');
+                tx.objectStore('logs').add(rec);
+                tx.oncomplete = () => { if (cb) cb(); };
+                tx.onerror = (e) => console.error('dbPut', e);
+            } catch (err) { console.error(err); if (cb) cb(); }
+        }
+        function dbClear(cb) {
+            if (!DB) { if (cb) cb(); return; }
+            try {
+                const tx = DB.transaction('logs', 'readwrite');
+                tx.objectStore('logs').clear();
+                tx.oncomplete = () => { if (cb) cb(); };
+            } catch (err) { console.error(err); if (cb) cb(); }
+        }
+        function dbCount(cb) {
+            if (!DB) { if (cb) cb(0); return; }
+            try {
+                const tx = DB.transaction('logs', 'readonly');
+                const rq2 = tx.objectStore('logs').count();
+                rq2.onsuccess = () => cb(rq2.result);
+                rq2.onerror = () => cb(0);
+            } catch (err) { console.error(err); cb(0); }
+        }
+        function dbAll(cb) {
+            if (!DB) { if (cb) cb([]); return; }
+            try {
+                const tx = DB.transaction('logs', 'readonly');
+                const rq2 = tx.objectStore('logs').getAll();
+                rq2.onsuccess = () => cb(rq2.result || []);
+                rq2.onerror = () => cb([]);
+            } catch (err) { console.error(err); cb([]); }
+        }
+        function refreshDbCount() {
+            dbCount(n => {
+                const el = document.getElementById('dbCount');
+                if (el) el.innerText = `${n} record tersimpan otomatis (IndexedDB persisten)`;
+            });
+        }
 
         // Helper: SVG Radial Gauge Offset Calculation with support for sub-zero ranges
         function calculateGaugeOffset(val, minVal, maxVal) {
@@ -387,7 +452,7 @@
                             data: [],
                             borderColor: '#EF4444',
                             backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                            tension: 0.15,
+                            tension: 0,
                             borderWidth: 2.5,
                             pointRadius: 4,
                             pointHoverRadius: 6,
@@ -398,7 +463,7 @@
                             data: [],
                             borderColor: '#06B6D4',
                             backgroundColor: 'transparent',
-                            tension: 0.15,
+                            tension: 0,
                             borderWidth: 2,
                             pointRadius: 3,
                             pointHoverRadius: 5,
@@ -409,7 +474,7 @@
                             data: [],
                             borderColor: '#6366F1',
                             backgroundColor: 'transparent',
-                            tension: 0.15,
+                            tension: 0,
                             borderWidth: 1.5,
                             pointRadius: 3,
                             pointHoverRadius: 5,
@@ -420,7 +485,7 @@
                             data: [],
                             borderColor: '#A78BFA',
                             backgroundColor: 'transparent',
-                            tension: 0.15,
+                            tension: 0,
                             borderWidth: 1.5,
                             borderDash: [4, 3],
                             pointRadius: 2,
@@ -432,7 +497,7 @@
                             data: [],
                             borderColor: '#C084FC',
                             backgroundColor: 'transparent',
-                            tension: 0.15,
+                            tension: 0,
                             borderWidth: 1.5,
                             borderDash: [4, 3],
                             pointRadius: 2,
@@ -444,6 +509,7 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
+                    animation: false,   // Presisi akurat: update seketika tanpa animasi decay
                     interaction: {
                         mode: 'index',
                         intersect: false
@@ -487,19 +553,81 @@
                 }
             });
 
-            // Initial startup load
-            updateDashboard(480, 130, 45, 39, 15, 1300, 1105);
+            // Persistence: load riwayat tersimpan, lalu seed data awal
+            openDB(() => {
+                dbAll((rows) => {
+                    const N = Math.min(rows.length, 25);
+                    const last = rows.slice(-N);
+                    last.forEach((r, i) => {
+                        const rec = {
+                            id: autoid++,
+                            time: r.time,
+                            temp: r.temp, flow: r.flow,
+                            p1: r.p1, p2: r.p2, p3: r.p3,
+                            eIn: r.eIn, eOut: r.eOut,
+                            eff: r.eff, statusText: r.statusText
+                        };
+                        logsHistory.push(rec);
+                        if (telemetryChart) {
+                            telemetryChart.data.labels.push(r.time);
+                            telemetryChart.data.datasets[0].data.push(rec.temp);
+                            telemetryChart.data.datasets[1].data.push(rec.flow);
+                            telemetryChart.data.datasets[2].data.push(rec.p1);
+                            telemetryChart.data.datasets[3].data.push(rec.p2);
+                            telemetryChart.data.datasets[4].data.push(rec.p3);
+                        }
+                        const tb = document.getElementById('logTableBody');
+                        if (tb) {
+                            const cls = rec.temp < 0 ? 'text-sky-400' : rec.temp > 700 ? 'text-rose-400' : rec.temp > 550 ? 'text-amber-400' : 'text-emerald-400';
+                            const sname = rec.statusText;
+                            const row = document.createElement('tr');
+                            row.className = "hover:bg-slate-800/40 border-b border-slate-800/40";
+                            row.innerHTML = `
+                                <td class="p-2 text-slate-400">${rec.time}</td>
+                                <td class="p-2 font-bold">${rec.temp.toFixed(2)}°C</td>
+                                <td class="p-2 text-cyan-300">${rec.flow.toFixed(2)} L/s</td>
+                                <td class="p-2 ${rec.p1 < 0 ? 'text-rose-400' : 'text-purple-300'}">${rec.p1.toFixed(2)}</td>
+                                <td class="p-2 text-amber-300">${rec.eff}%</td>
+                                <td class="p-2"><span class="${cls} font-bold">${sname}</span></td>`;
+                            tb.insertBefore(row, tb.firstChild);
+                        }
+                    });
+                    // pastikan urutan chart tetap oldest -> newest
+                    if (telemetryChart) {
+                        telemetryChart.data.labels.reverse();
+                        telemetryChart.data.datasets.forEach(ds => ds.data.reverse());
+                    }
+                    if (last.length > 0) {
+                        // state baseline = titik data terakhir yang tersimpan
+                        const l = last[last.length - 1];
+                        stateTemp = l.temp; stateFlow = l.flow;
+                        stateP1 = l.p1; stateP2 = l.p2; stateP3 = l.p3;
+                        stateEIn = l.eIn; stateEOut = l.eOut;
+                        refreshDashboardOnLoad(stateTemp, stateFlow, stateP1, stateP2, stateP3, stateEIn, stateEOut);
+                    } else {
+                        updateDashboard(480, 130, 45, 39, 15, 1300, 1105);
+                    }
+                    readyToPersist = true;
+                    refreshDbCount();
+                });
+            });
 
-            // Auto Simulation Loop (Interval 1 Sec) - Floats around state values dynamically
+            // Auto Simulation Loop (Interval 1 Sec) - Mean-reverting random walk around
+            // the baseline state (Ornstein-Uhlenbeck style), agar kurva realistis tapi
+            // selalu menempel pada nilai acuan terakhir yang diketik.
             setInterval(() => {
                 if (!isSimulating) return;
 
-                // Add slight random fluctuation to the LAST inputted baseline
-                stateTemp += (Math.random() * 6 - 3);
-                stateFlow += (Math.random() * 2 - 1);
-                stateP1 += (Math.random() * 0.8 - 0.4);
-                stateP2 = stateP1 - (4 + Math.random() * 2);
-                stateP3 = stateP2 - (20 + Math.random() * 3);
+                const THETA = 0.18;    // kekuatan tarik balik ke baseline
+                const SIGMA = { temp: 3.5, flow: 1.2, p1: 0.6 };
+                function walk(v, mean, sigma) {
+                    return v + THETA * (mean - v) + sigma * (Math.random() * 2 - 1);
+                }
+                stateTemp = walk(stateTemp, stateTemp, SIGMA.temp);  // baseline juga glide pelan
+                stateFlow = walk(stateFlow, stateFlow, SIGMA.flow);
+                stateP1   = walk(stateP1,   stateP1,   SIGMA.p1);
+                stateP2   = stateP1 - (4 + Math.random() * 2);
+                stateP3   = stateP2 - (20 + Math.random() * 3);
 
                 updateDashboard(stateTemp, stateFlow, stateP1, stateP2, stateP3, stateEIn, stateEOut);
             }, 1000);
@@ -548,9 +676,38 @@
             }
         }
 
+        // Toggle smoothing/interpolasi grafik on-off (presisi tajam vs visual lembut)
+        function toggleInterp() {
+            useInterp = !useInterp;
+            const T = useInterp ? 0.4 : 0;
+            telemetryChart.data.datasets.forEach(ds => ds.tension = T);
+            const b = document.getElementById('btnInterp');
+            b.innerHTML = useInterp ? '〰️ Interpolasi: ON' : '📐 Interpolasi: OFF';
+            telemetryChart.update('none');
+        }
+
+        // Hapus seluruh riwayat penampungan + grafik + tabel
+        function clearAllDbData() {
+            if (!confirm('Yakin hapus semua data penampungan persisten?')) return;
+            dbClear(() => {
+                logsHistory = [];
+                const tb = document.getElementById('logTableBody');
+                if (tb) tb.innerHTML = '';
+                clearChartData();
+                refreshDbCount();
+            });
+        }
+
+        // Restore gauge & panel dari data tersimpan TANPA mendorong titik baru ke chart
+        function refreshDashboardOnLoad(temp, flow, p1, p2, p3, eIn, eOut) {
+            readyToPersist = false; // while restoring jangan persist
+            updateDashboard(temp, flow, p1, p2, p3, eIn, eOut);
+            readyToPersist = true;
+        }
+
         // Update Dashboard Display with New Telemetry Data
         function updateDashboard(temp, flow, p1, p2, p3, eIn, eOut) {
-            // Update state baseline so simulation continues smoothly from here if turned back on
+            // Nilai eksak: simpan langsung tanpa dibulatkan supaya chart & gauge absolut presisi
             stateTemp = temp;
             stateFlow = flow;
             stateP1 = p1;
@@ -649,7 +806,7 @@
             addLogRecord(nowTime, temp, flow, p1, p2, p3, eff);
         }
 
-        // Add Log Record to Table & Memory
+        // Add Log Record to Table, Memory, & IndexedDB
         function addLogRecord(time, temp, flow, p1, p2, p3, eff) {
             const status = temp < 0 ? '<span class="text-sky-400 font-bold">SUB-ZERO</span>' :
                           temp > 700 ? '<span class="text-rose-400 font-bold">CRITICAL</span>' :
@@ -658,18 +815,28 @@
 
             const statusText = temp < 0 ? 'SUB-ZERO' : temp > 700 ? 'CRITICAL' : temp > 550 ? 'WARNING' : 'NORMAL';
 
-            logsHistory.unshift({
+            const rec = {
+                id: autoid++,
                 time,
-                temp: parseFloat(temp).toFixed(1),
-                flow: parseFloat(flow).toFixed(1),
-                p1: parseFloat(p1).toFixed(1),
-                p2: parseFloat(p2).toFixed(1),
-                p3: parseFloat(p3).toFixed(1),
+                temp: parseFloat(temp.toFixed(2)),
+                flow: parseFloat(flow.toFixed(2)),
+                p1: parseFloat(p1.toFixed(2)),
+                p2: parseFloat(p2.toFixed(2)),
+                p3: parseFloat(p3.toFixed(2)),
+                eIn: parseFloat(stateEIn.toFixed(2)),
+                eOut: parseFloat(stateEOut.toFixed(2)),
                 eff,
                 statusText
-            });
-
+            };
+            logsHistory.unshift(rec);
             if (logsHistory.length > 50) logsHistory.pop();
+
+            // persistensi: hanya titik asli (bukan seed bootstrap) yang disimpan
+            if (readyToPersist) {
+                dbPut({ time: rec.time, temp: rec.temp, flow: rec.flow, p1: rec.p1, p2: rec.p2,
+                        p3: rec.p3, eIn: rec.eIn, eOut: rec.eOut, eff: rec.eff, statusText: rec.statusText },
+                      refreshDbCount);
+            }
 
             const tbody = document.getElementById('logTableBody');
             if (tbody) {
@@ -677,9 +844,9 @@
                 newRow.className = "hover:bg-slate-800/40 border-b border-slate-800/40";
                 newRow.innerHTML = `
                     <td class="p-2 text-slate-400">${time}</td>
-                    <td class="p-2 font-bold">${parseFloat(temp).toFixed(1)}°C</td>
-                    <td class="p-2 text-cyan-300">${parseFloat(flow).toFixed(1)} L/s</td>
-                    <td class="p-2 ${parseFloat(p1) < 0 ? 'text-rose-400' : 'text-purple-300'}">${parseFloat(p1).toFixed(1)}</td>
+                    <td class="p-2 font-bold">${parseFloat(temp).toFixed(2)}°C</td>
+                    <td class="p-2 text-cyan-300">${parseFloat(flow).toFixed(2)} L/s</td>
+                    <td class="p-2 ${parseFloat(p1) < 0 ? 'text-rose-400' : 'text-purple-300'}">${parseFloat(p1).toFixed(2)}</td>
                     <td class="p-2 text-amber-300">${eff}%</td>
                     <td class="p-2">${status}</td>
                 `;
@@ -747,9 +914,9 @@
         function exportCSV() {
             if (logsHistory.length === 0) return alert('Belum ada data riwayat telemetri.');
 
-            let csvContent = "data:text/csv;charset=utf-8,Waktu,Temperatur(C),FlowRate(L/s),Tekanan1(Bar),Tekanan2(Bar),Tekanan3(Bar),Efisiensi(%),Status\n";
+            let csvContent = "data:text/csv;charset=utf-8,Waktu,Temperatur(C),FlowRate(L/s),Tekanan1(Bar),Tekanan2(Bar),Tekanan3(Bar),EnergiIn(kW),EnergiOut(kW),Efisiensi(%),Status\n";
             logsHistory.forEach(r => {
-                csvContent += `${r.time},${r.temp},${r.flow},${r.p1},${r.p2},${r.p3},${r.eff},${r.statusText}\n`;
+                csvContent += `${r.time},${r.temp},${r.flow},${r.p1},${r.p2},${r.p3},${r.eIn ?? ''},${r.eOut ?? ''},${r.eff},${r.statusText}\n`;
             });
 
             const encodedUri = encodeURI(csvContent);
