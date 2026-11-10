@@ -622,7 +622,15 @@
                             titleColor: '#F8FAFC',
                             bodyColor: '#E2E8F0',
                             borderColor: 'rgba(255, 255, 255, 0.1)',
-                            borderWidth: 1
+                            borderWidth: 1,
+                            callbacks: {
+                                // unit & desimal eksak per sensor — angka di tooltip = angka real
+                                label: (c) => {
+                                    const unit = c.datasetIndex === 0 ? ' °C' : c.datasetIndex === 1 ? ' L/s' : ' Bar';
+                                    const v = c.parsed.y;
+                                    return `${c.dataset.label}: ${v.toFixed(2)}${unit}`;
+                                }
+                            }
                         }
                     },
                     scales: {
@@ -634,20 +642,20 @@
                             type: 'linear',
                             display: true,
                             position: 'left',
-                            suggestedMin: -50,
-                            suggestedMax: 1050, // sedikit headroom di atas clamp 1000°C
+                            min: -50,
+                            max: 1050, // EXAK: sumbu statis, titik tidak pernah 'melompat' skala
                             title: { display: true, text: 'Temperatur Turbin (°C)', color: '#EF4444', font: { size: 10 } },
-                            ticks: { color: '#EF4444', font: { size: 9 } },
+                            ticks: { color: '#EF4444', font: { size: 9 }, callback: (v) => v.toFixed(0) },
                             grid: { color: 'rgba(239, 68, 68, 0.08)' }
                         },
                         yMetrics: {
                             type: 'linear',
                             display: true,
                             position: 'right',
-                            suggestedMin: -50,
-                            suggestedMax: 250,
+                            min: -50,
+                            max: 250, // EXAK
                             title: { display: true, text: 'Flow (L/s) / Tekanan (Bar)', color: '#06B6D4', font: { size: 10 } },
-                            ticks: { color: '#06B6D4', font: { size: 9 } },
+                            ticks: { color: '#06B6D4', font: { size: 9 }, callback: (v) => v.toFixed(0) },
                             grid: { drawOnChartArea: false }
                         }
                     }
@@ -699,11 +707,13 @@
                         telemetryChart.data.datasets.forEach(ds => ds.data.reverse());
                     }
                     if (last.length > 0) {
-                        // state baseline = titik data terakhir yang tersimpan
+                        // state + ANCHOR = titik terakhir tersimpan. Dengan ini bila user
+                        // langsung menyalakan Auto Sim, walk mengejar nilai tersimpan, bukan default.
                         const l = last[last.length - 1];
                         stateTemp = l.temp; stateFlow = l.flow;
                         stateP1 = l.p1; stateP2 = l.p2; stateP3 = l.p3;
                         stateEIn = l.eIn; stateEOut = l.eOut;
+                        anchor = { temp: l.temp, flow: l.flow, p1: l.p1, p2: l.p2, p3: l.p3, eIn: l.eIn, eOut: l.eOut };
                         refreshDashboardOnLoad(stateTemp, stateFlow, stateP1, stateP2, stateP3, stateEIn, stateEOut);
                     } else {
                         updateDashboard(480, 130, 45, 39, 15, 1300, 1105);
@@ -716,10 +726,17 @@
             // Auto Simulation Loop (Interval 1 Sec)
             // Ornstein-Uhlenbeck: tarik balik ke ANCHOR (nilai ketikan user),
             // bukan ke nilai saat itu — dinamika stabil, tidak pernah misal jauh.
+            // Sampling berbasis timestamp: 1 titik = 1000 ms EXAK.
+            // Drift setInterval dikompensasi lewat accumulator biner.
+            let lastTick = performance.now();
             setInterval(() => {
+                const now = performance.now();
+                if (now - lastTick < 950) return;   // detik belum lewat, skip
+                lastTick = now - ((now - lastTick) % 1000); // re-align
+
                 if (!isSimulating) return;
 
-                const THETA = 0.25;                       // kekuatan mean-reversion
+                const THETA = 0.25;
                 const SIGMA = { temp: 3.0, flow: 1.1, p1: 0.5 };
                 const walk = (v, mean, sigma, lo, hi) =>
                     Math.max(lo, Math.min(hi, v + THETA * (mean - v) + sigma * (Math.random() * 2 - 1)));
@@ -727,14 +744,13 @@
                 stateTemp = walk(stateTemp, anchor.temp, SIGMA.temp, -50, 1000);
                 stateFlow = walk(stateFlow, anchor.flow, SIGMA.flow, -50, 250);
                 stateP1   = walk(stateP1,   anchor.p1,   SIGMA.p1,  -10, 100);
-                // p2/p3 mengikuti gradien tekanan fisik inlet -> outlet
                 stateP2   = walk(stateP2,   anchor.p2, 0.5, -10, 100);
                 stateP3   = walk(stateP3,   anchor.p3, 0.6, -10, 100);
                 stateEIn  = walk(stateEIn,  anchor.eIn,  25, -500, 3000);
                 stateEOut = walk(stateEOut, anchor.eOut, 20, -500, 3000);
 
                 updateDashboard(stateTemp, stateFlow, stateP1, stateP2, stateP3, stateEIn, stateEOut);
-            }, 1000);
+            }, 50);
         });
 
         // Switch Operating Modes
@@ -893,7 +909,7 @@
 
             // 5+6. Push point: dilewati saat restore dari DB (biar tidak dobel)
             if (!chartLock) {
-                const nowTime = new Date().toLocaleTimeString();
+                const nowTime = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
                 if (telemetryChart) {
                     const MAX_POINTS = 25;
                     if (telemetryChart.data.labels.length >= MAX_POINTS) {
