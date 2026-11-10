@@ -211,7 +211,7 @@
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h3 class="text-sm font-semibold text-slate-300">Grafik Analisis Tren Presisi (Dual Skala Sumbu-Y)</h3>
-                        <p class="text-[11px] text-slate-400">Temp (Kiri: °C) vs Flow & Tekanan (Kanan: L/s & Bar)</p>
+                        <p class="text-[11px] text-slate-400">Temp (Kiri: °C) vs Flow & Tekanan (Kanan: L/s & Bar) — sampling 1 detik, jendela 30 titik</p>
                     </div>
                     <div class="flex items-center gap-2">
                         <button onclick="clearChartData()" class="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded text-xs transition">
@@ -476,57 +476,73 @@
             // Initial First Data Load
             updateDashboard(480, 130, 45, 39, 15, 1300, 1105);
 
-            // Auto Simulation Loop (Interval 2 Sec)
+            // Auto Simulation Loop (Interval 1 Sec - sampling per detik)
             let simCycle = 0, eventPeak = 0, scenario = '';
+            let simVals = { temp: 480, flow: 130, p1: 45, p2: 41, p3: 21, eIn: 1300, eOut: 1105 };
 
             setInterval(() => {
                 if (!isSimulating) return;
                 simCycle++;
                 eventPeak--;
 
-                let temp = 480 + (Math.random() * 40 - 20);
-                let flow = 130 + (Math.random() * 10 - 5);
-                let p1 = 45 + (Math.random() * 4 - 2);
-                let p2 = p1 - (4 + Math.random() * 2);
-                let p3 = p2 - (20 + Math.random() * 3);
-                let eIn = 1300 + Math.round(Math.random() * 100 - 50);
-                let eOut = Math.round(eIn * (0.82 + Math.random() * 0.05));
+                /* Target sensor dihitung tiap detik; nilai tampil di-lerp
+                   menuju target (konvergensi ~2 detik) supaya kurva kelihatan
+                   seperti sensor nyata, bukan lompatan acak. */
+                let tTemp = 480 + (Math.random() * 40 - 20);
+                let tFlow = 130 + (Math.random() * 10 - 5);
+                let tP1 = 45 + (Math.random() * 4 - 2);
+                let tP2 = tP1 - (4 + Math.random() * 2);
+                let tP3 = tP2 - (20 + Math.random() * 3);
+                let tEIn = 1300 + Math.round(Math.random() * 100 - 50);
+                let tEOut = Math.round(tEIn * (0.82 + Math.random() * 0.05));
 
                 // Skenario uji berkala supaya semua status gauge teruji
-                if (eventPeak <= 0 && simCycle > 2 && Math.random() < 0.10) {
-                    eventPeak = 2 + Math.floor(Math.random() * 4);
+                if (eventPeak <= 0 && simCycle > 3 && Math.random() < 0.04) {
+                    eventPeak = 4 + Math.floor(Math.random() * 6);
                     const roll = Math.random();
                     scenario = roll < 0.30 ? 'warm' : roll < 0.60 ? 'spike' : 'subzero';
                 }
                 if (eventPeak > 0 && scenario === 'warm') {
                     // WARNING: turbin mulai panas berlebih, efisiensi turun
-                    temp = 560 + Math.random() * 135;
-                    p1 += 8 + Math.random() * 4;
-                    p2 = p1 - (3 + Math.random() * 2);
-                    p3 = p2 - (16 + Math.random() * 4);
-                    eIn += 150 + Math.random() * 100;
-                    eOut = Math.round(eIn * (0.68 + Math.random() * 0.06));
+                    tTemp = 560 + Math.random() * 135;
+                    tP1 = 50 + Math.random() * 6;
+                    tP2 = tP1 - (3 + Math.random() * 2);
+                    tP3 = tP2 - (16 + Math.random() * 4);
+                    tEIn = 1400 + Math.random() * 150;
+                    tEOut = Math.round(tEIn * (0.68 + Math.random() * 0.06));
                 } else if (eventPeak > 0 && scenario === 'spike') {
                     // CRITICAL + tekanan keluar rendah (indikasi trauma sistem)
-                    temp = 720 + Math.random() * 130;
-                    p1 += 16 + Math.random() * 8;
-                    p2 = p1 - (2 + Math.random() * 2);
-                    p3 = p2 - (6 + Math.random() * 4);
-                    eIn += 350 + Math.random() * 150;
-                    eOut = Math.round(eIn * (0.30 + Math.random() * 0.12));
+                    tTemp = 720 + Math.random() * 130;
+                    tP1 = 58 + Math.random() * 10;
+                    tP2 = tP1 - (2 + Math.random() * 2);
+                    tP3 = tP2 - (6 + Math.random() * 4);
+                    tEIn = 1600 + Math.random() * 200;
+                    tEOut = Math.round(tEIn * (0.30 + Math.random() * 0.12));
                 } else if (eventPeak > 0 && scenario === 'subzero') {
                     // SUB-ZERO + tekanan vacuum di semua saluran
-                    temp = -(10 + Math.random() * 38);
-                    flow = 60 + Math.random() * 30;
-                    p1 = -(2 + Math.random() * 3);
-                    p2 = p1 - (2 + Math.random() * 2);
-                    p3 = p2 - (2 + Math.random() * 2);
-                    eIn = 480 + Math.random() * 120;
-                    eOut = Math.round(eIn * (0.86 + Math.random() * 0.05));
+                    tTemp = -(10 + Math.random() * 38);
+                    tFlow = 60 + Math.random() * 30;
+                    tP1 = -(2 + Math.random() * 3);
+                    tP2 = tP1 - (2 + Math.random() * 2);
+                    tP3 = tP2 - (2 + Math.random() * 2);
+                    tEIn = 480 + Math.random() * 120;
+                    tEOut = Math.round(tEIn * (0.86 + Math.random() * 0.05));
                 }
 
-                updateDashboard(temp, flow, p1, p2, p3, eIn, eOut);
-            }, 2000);
+                // Lerp 45%/detik -> ramping natural, tanpa teleportasi nilai
+                const K = 0.45;
+                simVals = {
+                    temp: simVals.temp + (tTemp - simVals.temp) * K,
+                    flow: simVals.flow + (tFlow - simVals.flow) * K,
+                    p1:   simVals.p1   + (tP1   - simVals.p1)   * K,
+                    p2:   simVals.p2   + (tP2   - simVals.p2)   * K,
+                    p3:   simVals.p3   + (tP3   - simVals.p3)   * K,
+                    eIn:  simVals.eIn  + (tEIn  - simVals.eIn)  * K,
+                    eOut: simVals.eOut + (tEOut - simVals.eOut) * K
+                };
+
+                updateDashboard(simVals.temp, simVals.flow, simVals.p1, simVals.p2, simVals.p3, simVals.eIn, simVals.eOut);
+            }, 1000);
         });
 
         // Switch Operating Modes (Simulation vs Manual Field Test)
@@ -646,7 +662,7 @@
             const nowTime = new Date().toLocaleTimeString();
             if (telemetryChart) {
                 // Limit max data points on graph to 20
-                const MAX_POINTS = 20;
+                const MAX_POINTS = 30; /* jendela 30 detik, 1 titik/detik */
                 if (telemetryChart.data.labels.length >= MAX_POINTS) {
                     telemetryChart.data.labels.shift();
                     telemetryChart.data.datasets.forEach(ds => ds.data.shift());
