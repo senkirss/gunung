@@ -56,12 +56,106 @@
         ::-webkit-scrollbar-thumb:hover {
             background: #475569;
         }
+
+        /* ============ GLASSMORPHISM DATA VIZ SKIN ============ */
+        .aurora {
+            position: fixed; inset: 0; z-index: -1; pointer-events: none;
+            background:
+                radial-gradient(1000px 600px at 8% -10%, rgba(56,189,248,.16), transparent 60%),
+                radial-gradient(900px 500px at 95% 0%, rgba(139,92,246,.14), transparent 60%),
+                radial-gradient(1200px 700px at 50% 115%, rgba(14,165,233,.10), transparent 62%);
+        }
+        /* noise grain tipis biar glass terasa fisik */
+        .aurora::after {
+            content: ''; position: absolute; inset: 0; opacity: .05; mix-blend-mode: overlay;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='0.9'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)'/%3E%3C/svg%3E");
+        }
+
+        .glass-card {
+            position: relative;
+            background: linear-gradient(165deg, rgba(20,26,40,.62), rgba(9,12,20,.78));
+            backdrop-filter: blur(18px) saturate(140%);
+            -webkit-backdrop-filter: blur(18px) saturate(140%);
+            border: 1px solid rgba(255,255,255,.075);
+            border-radius: 1.25rem;
+            box-shadow:
+                0 1px 0 0 rgba(255,255,255,.06) inset,          /* bevel atas */
+                0 24px 50px -20px rgba(0,0,0,.65),              /* pandangan terang */
+                0 0 0 1px rgba(255,255,255,.015);               /* batas luar halus */
+            transition: transform .35s cubic-bezier(.22,1,.36,1), border-color .35s ease, box-shadow .35s ease;
+        }
+        .glass-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(120,180,255,.22);
+            box-shadow:
+                0 1px 0 0 rgba(255,255,255,.09) inset,
+                0 30px 60px -22px rgba(4,10,28,.8),
+                0 0 0 1px rgba(120,180,255,.06);
+        }
+        /* garis cahaya di tepi atas kartu */
+        .glass-card::before {
+            content: ''; position: absolute; left: 12%; right: 12%; top: -1px; height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(160,200,255,.35), transparent);
+            pointer-events: none;
+        }
+
+        /* angka besar data-viz: mono, tabular, glow lembut */
+        .big-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-variant-numeric: tabular-nums;
+            font-weight: 700;
+            text-shadow: 0 0 24px rgba(125,180,255,.35), 0 0 60px rgba(125,180,255,.12);
+        }
+
+        /* chip glow menegaskan nilai hidup */
+        .live-chip {
+            font-family: 'JetBrains Mono', monospace;
+            border-radius: 999px;
+            border: 1px solid rgba(255,255,255,.14);
+            background: rgba(255,255,255,.04);
+            backdrop-filter: blur(8px);
+        }
+
+        /* bar gauge lebih modern */
+        .glass-bar { position: relative; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,.05); }
+        .glass-bar > div { border-radius: 999px; transition: width .6s cubic-bezier(.22,1,.36,1), background .4s ease; }
+        .glass-bar::after {
+            content: ''; position: absolute; inset: 0;
+            background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,.08) 50%, transparent 70%);
+            animation: sheen 3.2s linear infinite; pointer-events: none;
+        }
+        @keyframes sheen { from { transform: translateX(-100%);} to { transform: translateX(100%);} }
+
+        /* sticky header glass lebih melayang */
+        header.nav-stick {
+            position: sticky; top: 1rem; z-index: 40;
+            background: linear-gradient(160deg, rgba(22,28,44,.72), rgba(10,13,22,.82));
+            backdrop-filter: blur(20px) saturate(150%);
+            border: 1px solid rgba(255,255,255,.09);
+        }
+
+        /* glow ring untuk mode aktif */
+        .ring-active {
+            box-shadow: 0 0 0 1px rgba(56,189,248,.5), 0 0 22px rgba(56,189,248,.28), 0 0 50px rgba(56,189,248,.14);
+        }
+
+        /* smooth entrance waterfall per kartu */
+        .rise { opacity: 0; transform: translateY(14px); animation: rise .7s cubic-bezier(.22,1,.36,1) forwards; }
+        @keyframes rise { to { opacity: 1; transform: none; } }
+        .rise:nth-child(2) { animation-delay: .07s; } .rise:nth-child(3) { animation-delay: .14s; }
+        .rise:nth-child(4) { animation-delay: .21s; }
+
+        @media (prefers-reduced-motion: reduce) {
+            .aurora::after, .glass-bar::after { animation: none; }
+            .rise { animation: none; opacity: 1; transform: none; }
+        }
     </style>
 </head>
 <body class="min-h-screen p-4 lg:p-6 text-slate-200">
+    <div class="aurora" aria-hidden="true"></div>
 
     <!-- Top Navigation Bar -->
-    <header class="glass-card rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4 border-l-4 border-l-cyan-500">
+    <header class="nav-stick rounded-2xl p-4 mb-6 flex flex-wrap items-center justify-between gap-4">
         <div class="flex items-center gap-3">
             <div class="p-2.5 bg-cyan-500/10 text-cyan-400 rounded-xl border border-cyan-500/30">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
@@ -71,16 +165,16 @@
                     SCADA Telemetry System
                     <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 font-mono">v3.0 DB Storage + 1s Precision</span>
                 </h1>
-                <p class="text-xs text-slate-400">Monitoring &amp; Pengujian Kinerja Sistem Industri Real-Time — penampungan IndexedDB persisten, sampling 1 detik</p>
+                <p class="text-xs text-slate-400"><span class='w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse inline-block'></span>Monitoring &amp; Real-Time · IndexedDB persisten · sampling 1&nbsp;detik</p>
             </div>
         </div>
 
         <!-- System Mode Controls -->
         <div class="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
-            <button id="modeSimBtn" onclick="switchMode('sim')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all bg-slate-800 text-slate-400 hover:text-white">
+            <button id="modeSimBtn" onclick="switchMode('sim')" class="px-4 py-2 rounded-xl text-xs font-semibold transition-all live-chip text-slate-300 hover:text-white">
                 ⚡ Auto Simulation
             </button>
-            <button id="modeManualBtn" onclick="switchMode('manual')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 transition-all">
+            <button id="modeManualBtn" onclick="switchMode('manual')" class="ring-active px-4 py-2 rounded-xl text-xs font-semibold live-chip text-sky-300 transition-all">
                 🛠️ Field Input Test (Active)
             </button>
         </div>
@@ -96,7 +190,7 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
 
                 <!-- 1. Turbine Temp Gauge -->
-                <div class="glass-card rounded-2xl p-5 relative overflow-hidden flex flex-col items-center text-center">
+                <div class="glass-card rise rounded-2xl p-5 relative overflow-hidden flex flex-col items-center text-center">
                     <span class="text-xs font-semibold text-slate-400 tracking-wider uppercase self-start mb-2">Temperatur Turbin</span>
                     <div class="relative w-40 h-40 flex items-center justify-center">
                         <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
@@ -104,7 +198,7 @@
                             <circle id="tempGaugeCircle" cx="60" cy="60" r="48" stroke="#10B981" stroke-width="10" stroke-dasharray="301.59" stroke-dashoffset="100" stroke-linecap="round" fill="none" class="gauge-meter" />
                         </svg>
                         <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span id="tempVal" class="text-3xl font-extrabold font-mono text-white">450</span>
+                            <span id="tempVal" class="big-num text-4xl text-white">450</span>
                             <span class="text-xs font-medium text-slate-400">°C</span>
                         </div>
                     </div>
@@ -116,7 +210,7 @@
                 </div>
 
                 <!-- 2. Flow Rate Gauge -->
-                <div class="glass-card rounded-2xl p-5 relative overflow-hidden flex flex-col items-center text-center">
+                <div class="glass-card rise rounded-2xl p-5 relative overflow-hidden flex flex-col items-center text-center">
                     <span class="text-xs font-semibold text-slate-400 tracking-wider uppercase self-start mb-2">Laju Aliran (Flow Rate)</span>
                     <div class="relative w-40 h-40 flex items-center justify-center">
                         <svg class="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
@@ -124,7 +218,7 @@
                             <circle id="flowGaugeCircle" cx="60" cy="60" r="48" stroke="#06B6D4" stroke-width="10" stroke-dasharray="301.59" stroke-dashoffset="120" stroke-linecap="round" fill="none" class="gauge-meter" />
                         </svg>
                         <div class="absolute inset-0 flex flex-col items-center justify-center">
-                            <span id="flowVal" class="text-3xl font-extrabold font-mono text-white">128.5</span>
+                            <span id="flowVal" class="big-num text-4xl text-white">128.5</span>
                             <span class="text-xs font-medium text-slate-400">Liter / detik</span>
                         </div>
                     </div>
@@ -145,8 +239,8 @@
                                 <span class="text-slate-400">Energi Masuk (In)</span>
                                 <span id="energyInVal" class="font-mono text-cyan-400 font-bold">1,250 kW</span>
                             </div>
-                            <div class="w-full bg-slate-800 rounded-full h-2">
-                                <div id="energyInBar" class="bg-cyan-500 h-2 rounded-full transition-all duration-500" style="width: 75%"></div>
+                            <div class="glass-bar w-full h-2">
+                            <div id="energyInBar" class="bg-cyan-500 h-2 rounded-full transition-all duration-500" style="width: 75%"></div>
                             </div>
                         </div>
 
@@ -155,8 +249,8 @@
                                 <span class="text-slate-400">Energi Keluar (Out)</span>
                                 <span id="energyOutVal" class="font-mono text-emerald-400 font-bold">1,062 kW</span>
                             </div>
-                            <div class="w-full bg-slate-800 rounded-full h-2">
-                                <div id="energyOutBar" class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 64%"></div>
+                            <div class="glass-bar w-full h-2">
+                            <div id="energyOutBar" class="bg-emerald-500 h-2 rounded-full transition-all duration-500" style="width: 64%"></div>
                             </div>
                         </div>
                     </div>
@@ -177,34 +271,34 @@
                 </h3>
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <!-- Channel 1 -->
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                    <div class="glass p-4 rounded-xl border border-white/[.07]">
                         <div class="flex justify-between items-center mb-2">
                             <span class="text-xs font-medium text-slate-400">Saluran A (Inlet)</span>
                             <span id="p1Val" class="font-mono text-sm font-bold text-cyan-400">42.5 Bar</span>
                         </div>
-                        <div class="w-full bg-slate-800 rounded-full h-2.5">
+                        <div class="glass-bar w-full h-2.5">
                             <div id="p1Bar" class="bg-cyan-500 h-2.5 rounded-full transition-all" style="width: 70%"></div>
                         </div>
                     </div>
 
                     <!-- Channel 2 -->
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                    <div class="glass p-4 rounded-xl border border-white/[.07]">
                         <div class="flex justify-between items-center mb-2">
                             <span class="text-xs font-medium text-slate-400">Saluran B (Main Valve)</span>
                             <span id="p2Val" class="font-mono text-sm font-bold text-indigo-400">38.0 Bar</span>
                         </div>
-                        <div class="w-full bg-slate-800 rounded-full h-2.5">
+                        <div class="glass-bar w-full h-2.5">
                             <div id="p2Bar" class="bg-indigo-500 h-2.5 rounded-full transition-all" style="width: 63%"></div>
                         </div>
                     </div>
 
                     <!-- Channel 3 -->
-                    <div class="bg-slate-900/60 p-4 rounded-xl border border-slate-800">
+                    <div class="glass p-4 rounded-xl border border-white/[.07]">
                         <div class="flex justify-between items-center mb-2">
                             <span class="text-xs font-medium text-slate-400">Saluran C (Outlet)</span>
                             <span id="p3Val" class="font-mono text-sm font-bold text-purple-400">14.2 Bar</span>
                         </div>
-                        <div class="w-full bg-slate-800 rounded-full h-2.5">
+                        <div class="glass-bar w-full h-2.5">
                             <div id="p3Bar" class="bg-purple-500 h-2.5 rounded-full transition-all" style="width: 28%"></div>
                         </div>
                     </div>
@@ -212,7 +306,7 @@
             </div>
 
             <!-- Real-Time Trend Line Chart -->
-            <div class="glass-card rounded-2xl p-5">
+            <div class="glass-card rise rounded-2xl p-5">
                 <div class="flex items-center justify-between mb-4">
                     <div>
                         <h3 class="text-sm font-semibold text-slate-300">Grafik Tren Presisi (Dual Skala Sumbu-Y)</h3>
@@ -246,19 +340,19 @@
                 <p class="text-xs text-slate-400 mb-3">Klik preset di bawah ini untuk pengujian langsung:</p>
 
                 <div class="grid grid-cols-2 gap-2">
-                    <button onclick="applyPreset('pltu')" class="p-2.5 bg-slate-900 hover:bg-slate-800 text-left rounded-xl border border-slate-800 transition text-xs">
+                    <button onclick="applyPreset('pltu')" class="p-2.5 glass rounded-xl border border-white/[.07] hover:border-white/20 text-left transition text-xs">
                         <div class="font-bold text-amber-400">PLTU Steam Turbine</div>
                         <div class="text-[10px] text-slate-400">680°C / 62 Bar</div>
                     </button>
-                    <button onclick="applyPreset('high')" class="p-2.5 bg-rose-950/40 hover:bg-rose-900/50 text-left rounded-xl border border-rose-800/40 transition text-xs">
+                    <button onclick="applyPreset('high')" class="p-2.5 glass rounded-xl border border-rose-800/30 hover:border-rose-500/50 text-left transition text-xs">
                         <div class="font-bold text-rose-400">Ekstrem Overheat</div>
                         <div class="text-[10px] text-rose-300/70">1000°C / 95 Bar</div>
                     </button>
-                    <button onclick="applyPreset('cryo')" class="p-2.5 bg-cyan-950/40 hover:bg-cyan-900/50 text-left rounded-xl border border-cyan-800/40 transition text-xs">
+                    <button onclick="applyPreset('cryo')" class="p-2.5 glass rounded-xl border border-cyan-800/30 hover:border-cyan-500/50 text-left transition text-xs">
                         <div class="font-bold text-cyan-300">Cryogenic / Sub-Zero</div>
                         <div class="text-[10px] text-cyan-400/80">-40°C / Vacuum</div>
                     </button>
-                    <button onclick="applyPreset('leak')" class="p-2.5 bg-purple-950/40 hover:bg-purple-900/50 text-left rounded-xl border border-purple-800/40 transition text-xs">
+                    <button onclick="applyPreset('leak')" class="p-2.5 glass rounded-xl border border-purple-800/30 hover:border-purple-500/50 text-left transition text-xs">
                         <div class="font-bold text-purple-400">Kebocoran Tekanan</div>
                         <div class="text-[10px] text-purple-300/70">Vacuum Drop</div>
                     </button>
@@ -335,7 +429,7 @@
                 <!-- Log Table -->
                 <div class="overflow-x-auto max-h-60 rounded-xl border border-slate-800">
                     <table class="w-full text-left text-[11px] font-mono">
-                        <thead class="bg-[#080C15] text-slate-500 sticky top-0">
+                        <thead class="bg-[rgba(10,14,24,.92)] backdrop-blur-md text-slate-500 sticky top-0">
                             <tr>
                                 <th class="p-2">Waktu</th>
                                 <th class="p-2">Temp</th>
@@ -652,8 +746,8 @@
 
             if (mode === 'sim') {
                 isSimulating = true;
-                simBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 transition-all";
-                manualBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 hover:text-white transition-all";
+                simBtn.className = "ring-active px-4 py-2 rounded-xl text-xs font-semibold live-chip text-sky-300 transition-all";
+                manualBtn.className = "px-4 py-2 rounded-xl text-xs font-semibold live-chip text-slate-300 hover:text-white transition-all";
                 if (badge) {
                     badge.innerText = "Auto Simulation ON";
                     badge.className = "text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded";
@@ -664,8 +758,8 @@
                 }
             } else {
                 isSimulating = false; // STOP AUTO SIMULATION TO PREVENT OVERWRITING
-                manualBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/20 transition-all";
-                simBtn.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 text-slate-400 hover:text-white transition-all";
+                manualBtn.className = "ring-active px-4 py-2 rounded-xl text-xs font-semibold live-chip text-sky-300 transition-all";
+                simBtn.className = "px-4 py-2 rounded-xl text-xs font-semibold live-chip text-slate-300 hover:text-white transition-all";
                 if (badge) {
                     badge.innerText = "Auto Sim OFF (Manual Input)";
                     badge.className = "text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded";
