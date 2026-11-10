@@ -277,7 +277,7 @@
                     <div class="grid grid-cols-2 gap-3">
                         <div>
                             <label class="text-[11px] font-medium text-slate-400 block mb-1">Temp Turbin (°C)</label>
-                            <input type="number" step="0.1" id="inputTemp" value="1000.0" min="-50" max="1100" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
+                            <input type="number" step="0.1" id="inputTemp" value="1000.0" min="-50" max="1000" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:border-cyan-500 focus:outline-none font-mono" required>
                         </div>
                         <div>
                             <label class="text-[11px] font-medium text-slate-400 block mb-1">Flow Rate (L/s)</label>
@@ -374,6 +374,13 @@
         let stateP3 = 15;
         let stateEIn = 1300;
         let stateEOut = 1105;
+
+        // Anchor = nilai acuan dari user (manual/preset). Random walk selalu
+        // tertarik kembali ke sini, jadi tidak pernah menjauh dari nilai ketikan.
+        let anchor = { temp: 480, flow: 130, p1: 45, p2: 39, p3: 15, eIn: 1300, eOut: 1105 };
+        // chartLock: saat restore dari DB, gauge tetap diisi tapi chart & log tidak
+        // dikirim ulang (mencegah titik duplikat).
+        let chartLock = false;
 
         /* ---------- IndexedDB Penampungan Persisten ---------- */
         let DB = null;
@@ -534,7 +541,7 @@
                             display: true,
                             position: 'left',
                             suggestedMin: -50,
-                            suggestedMax: 1100, // Fixed suggested range so 1000°C climbs to the top accurately!
+                            suggestedMax: 1050, // sedikit headroom di atas clamp 1000°C
                             title: { display: true, text: 'Temperatur Turbin (°C)', color: '#EF4444', font: { size: 10 } },
                             ticks: { color: '#EF4444', font: { size: 9 } },
                             grid: { color: 'rgba(239, 68, 68, 0.08)' }
@@ -612,22 +619,25 @@
                 });
             });
 
-            // Auto Simulation Loop (Interval 1 Sec) - Mean-reverting random walk around
-            // the baseline state (Ornstein-Uhlenbeck style), agar kurva realistis tapi
-            // selalu menempel pada nilai acuan terakhir yang diketik.
+            // Auto Simulation Loop (Interval 1 Sec)
+            // Ornstein-Uhlenbeck: tarik balik ke ANCHOR (nilai ketikan user),
+            // bukan ke nilai saat itu — dinamika stabil, tidak pernah misal jauh.
             setInterval(() => {
                 if (!isSimulating) return;
 
-                const THETA = 0.18;    // kekuatan tarik balik ke baseline
-                const SIGMA = { temp: 3.5, flow: 1.2, p1: 0.6 };
-                function walk(v, mean, sigma) {
-                    return v + THETA * (mean - v) + sigma * (Math.random() * 2 - 1);
-                }
-                stateTemp = walk(stateTemp, stateTemp, SIGMA.temp);  // baseline juga glide pelan
-                stateFlow = walk(stateFlow, stateFlow, SIGMA.flow);
-                stateP1   = walk(stateP1,   stateP1,   SIGMA.p1);
-                stateP2   = stateP1 - (4 + Math.random() * 2);
-                stateP3   = stateP2 - (20 + Math.random() * 3);
+                const THETA = 0.25;                       // kekuatan mean-reversion
+                const SIGMA = { temp: 3.0, flow: 1.1, p1: 0.5 };
+                const walk = (v, mean, sigma, lo, hi) =>
+                    Math.max(lo, Math.min(hi, v + THETA * (mean - v) + sigma * (Math.random() * 2 - 1)));
+
+                stateTemp = walk(stateTemp, anchor.temp, SIGMA.temp, -50, 1000);
+                stateFlow = walk(stateFlow, anchor.flow, SIGMA.flow, -50, 250);
+                stateP1   = walk(stateP1,   anchor.p1,   SIGMA.p1,  -10, 100);
+                // p2/p3 mengikuti gradien tekanan fisik inlet -> outlet
+                stateP2   = walk(stateP2,   anchor.p2, 0.5, -10, 100);
+                stateP3   = walk(stateP3,   anchor.p3, 0.6, -10, 100);
+                stateEIn  = walk(stateEIn,  anchor.eIn,  25, -500, 3000);
+                stateEOut = walk(stateEOut, anchor.eOut, 20, -500, 3000);
 
                 updateDashboard(stateTemp, stateFlow, stateP1, stateP2, stateP3, stateEIn, stateEOut);
             }, 1000);
@@ -698,10 +708,12 @@
             });
         }
 
-        // Restore gauge & panel dari data tersimpan TANPA mendorong titik baru ke chart
+        // Restore gauge & panel dari data tersimpan TANPA mendorong titik baru ke chart/log
         function refreshDashboardOnLoad(temp, flow, p1, p2, p3, eIn, eOut) {
-            readyToPersist = false; // while restoring jangan persist
+            chartLock = true;
+            readyToPersist = false;
             updateDashboard(temp, flow, p1, p2, p3, eIn, eOut);
+            chartLock = false;
             readyToPersist = true;
         }
 
@@ -717,7 +729,7 @@
             stateEOut = eOut;
 
             // 1. Update Temperature Meter (Range -50°C to 1000°C)
-            document.getElementById('tempVal').innerText = parseFloat(temp).toFixed(1);
+            document.getElementById('tempVal').innerText = parseFloat(temp).toFixed(2);
             const tempOffset = calculateGaugeOffset(temp, -50, 1000);
             const tempCircle = document.getElementById('tempGaugeCircle');
             tempCircle.style.strokeDashoffset = tempOffset;
@@ -742,7 +754,7 @@
             }
 
             // 2. Update Flow Meter (Range -50 L/s to 250 L/s)
-            document.getElementById('flowVal').innerText = parseFloat(flow).toFixed(1);
+            document.getElementById('flowVal').innerText = parseFloat(flow).toFixed(2);
             const flowOffset = calculateGaugeOffset(flow, -50, 250);
             const flowCircle = document.getElementById('flowGaugeCircle');
             flowCircle.style.strokeDashoffset = flowOffset;
@@ -759,9 +771,9 @@
             }
 
             // 3. Update Pressure Channels (Range -10 Bar to 100 Bar)
-            document.getElementById('p1Val').innerText = `${parseFloat(p1).toFixed(1)} Bar`;
-            document.getElementById('p2Val').innerText = `${parseFloat(p2).toFixed(1)} Bar`;
-            document.getElementById('p3Val').innerText = `${parseFloat(p3).toFixed(1)} Bar`;
+            document.getElementById('p1Val').innerText = `${parseFloat(p1).toFixed(2)} Bar`;
+            document.getElementById('p2Val').innerText = `${parseFloat(p2).toFixed(2)} Bar`;
+            document.getElementById('p3Val').innerText = `${parseFloat(p3).toFixed(2)} Bar`;
 
             const calcPct = (val) => Math.max(0, Math.min(100, ((val - (-10)) / (100 - (-10))) * 100));
             [['p1Bar', p1], ['p2Bar', p2], ['p3Bar', p3]].forEach(([id, val]) => {
@@ -785,25 +797,25 @@
             }
             document.getElementById('efficiencyVal').innerText = `${eff} %`;
 
-            // 5. Push Point Accurately to Chart
-            const nowTime = new Date().toLocaleTimeString();
-            if (telemetryChart) {
-                const MAX_POINTS = 25;
-                if (telemetryChart.data.labels.length >= MAX_POINTS) {
-                    telemetryChart.data.labels.shift();
-                    telemetryChart.data.datasets.forEach(ds => ds.data.shift());
+            // 5+6. Push point: dilewati saat restore dari DB (biar tidak dobel)
+            if (!chartLock) {
+                const nowTime = new Date().toLocaleTimeString();
+                if (telemetryChart) {
+                    const MAX_POINTS = 25;
+                    if (telemetryChart.data.labels.length >= MAX_POINTS) {
+                        telemetryChart.data.labels.shift();
+                        telemetryChart.data.datasets.forEach(ds => ds.data.shift());
+                    }
+                    telemetryChart.data.labels.push(nowTime);
+                    telemetryChart.data.datasets[0].data.push(temp);  // Temp -> yTemp
+                    telemetryChart.data.datasets[1].data.push(flow);  // Flow -> yMetrics
+                    telemetryChart.data.datasets[2].data.push(p1);    // Press 1 -> yMetrics
+                    telemetryChart.data.datasets[3].data.push(p2);    // Press 2 -> yMetrics
+                    telemetryChart.data.datasets[4].data.push(p3);    // Press 3 -> yMetrics
+                    telemetryChart.update('none');
                 }
-                telemetryChart.data.labels.push(nowTime);
-                telemetryChart.data.datasets[0].data.push(temp);  // Temp onto yTemp (Left Axis)
-                telemetryChart.data.datasets[1].data.push(flow);  // Flow onto yMetrics (Right Axis)
-                telemetryChart.data.datasets[2].data.push(p1);    // Press 1 onto yMetrics (Right Axis)
-                telemetryChart.data.datasets[3].data.push(p2);    // Press 2 onto yMetrics (Right Axis)
-                telemetryChart.data.datasets[4].data.push(p3);    // Press 3 onto yMetrics (Right Axis)
-                telemetryChart.update('none');
+                addLogRecord(nowTime, temp, flow, p1, p2, p3, eff);
             }
-
-            // 6. Append to Cloud Database Table
-            addLogRecord(nowTime, temp, flow, p1, p2, p3, eff);
         }
 
         // Add Log Record to Table, Memory, & IndexedDB
@@ -868,6 +880,8 @@
             const eIn = parseFloat(document.getElementById('inputEnergyIn').value);
             const eOut = parseFloat(document.getElementById('inputEnergyOut').value);
 
+            // Kunci anchor: random walk sim akan mengejar nilai yang baru diketik
+            anchor = { temp, flow, p1, p2, p3, eIn, eOut };
             updateDashboard(temp, flow, p1, p2, p3, eIn, eOut);
         }
 
@@ -909,6 +923,10 @@
             }
             document.getElementById('telemetryForm').requestSubmit();
         }
+
+        // Set anchor setiap preset diterapkan (sinkron dengan yang ter-submit)
+        const _origApplyPreset = applyPreset;
+        applyPreset = function (type) { _origApplyPreset(type); };
 
         // Export Log Data to CSV File
         function exportCSV() {
